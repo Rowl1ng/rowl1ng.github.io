@@ -69,11 +69,13 @@ jobs:
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Ruby 💎
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3.5"
-          bundler-cache: true
+          # bundler-cache: true
       - name: Setup Python 🐍
         uses: actions/setup-python@v5
         with:
@@ -91,8 +93,9 @@ jobs:
           sudo apt-get update && sudo apt-get install -y imagemagick
           pip3 install --upgrade nbconvert
           export JEKYLL_ENV=production
-          bundle config set frozen false 
-          bundle install
+          bundle config set path vendor/bundle        
+          bundle config set frozen false              
+          bundle install --jobs 4                     
           bundle exec jekyll build
       - name: Purge unused CSS 🧹
         run: |
