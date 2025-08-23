@@ -8,7 +8,7 @@ importance: 2
 category: work
 ---
 
-### Abstract
+## Abstract
 
 Growing free online 3D shapes collections dictated research on 3D retrieval. Active debate has however been had on (i) what the best input modality is to trigger retrieval, and (ii) the ultimate usage scenario for such retrieval. 
 In this paper, we offer a different perspective towards answering these questions -- we study the use of 3D sketches as an input modality and advocate a VR-scenario where retrieval is conducted. Thus, the ultimate vision is that users can freely retrieve a 3D model by air-doodling in a VR environment.
