@@ -8,7 +8,7 @@ mathjax: true
 date: 2018-3-22 17:00
 update: 2018-08-24 17:00:00
 category: tech
-description:  pytorch version of Detectron
+description:  Pytorch version of Detectron
 tags:
 - object detection
 ---
