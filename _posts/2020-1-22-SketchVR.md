@@ -4,7 +4,7 @@ title: VR Sketch Development Log
 date: 2020-01-22 14:00:00
 description: VR Development
 tags: VR Unity
-categories: sample-posts
+categories: 3D Vision
 thumbnail: https://s2.loli.net/2025/08/18/QKq1UOGhzWXlNnC.png
 ---
 

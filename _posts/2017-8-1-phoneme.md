@@ -2,14 +2,13 @@
 description:  exploring how to find similar content without ASR for scam recognition task
 title:  基于音素识别的语音相似度研究
 layout: post
-tech: true
 istop: true
 mathjax: true
-background-image: https://s2.loli.net/2025/08/18/Zzyak2uh68OjlCo.png
+thumbnail: https://s2.loli.net/2025/08/18/Zzyak2uh68OjlCo.png
 tech: true
 date: 2017-8-1 13:27
 update: 2018-08-01 13:27:00
-category: tech
+category: Audio
 tags:
 - 语音处理
 - 深度学习

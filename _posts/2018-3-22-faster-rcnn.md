@@ -1,13 +1,11 @@
 ---
 title:  Detectron代码分析：从Faster R-CNN 到 Mask R-CNN
 layout: post
-background-image: https://s2.loli.net/2025/08/18/dNIECvFr4agL2jn.png
-tech: true
+thumbnail: https://s2.loli.net/2025/08/18/dNIECvFr4agL2jn.png
 istop: true
-mathjax: true
 date: 2018-3-22 17:00
 update: 2018-08-24 17:00:00
-category: tech
+category: 2D Vision
 description:  Pytorch version of Detectron
 tags:
 - object detection
