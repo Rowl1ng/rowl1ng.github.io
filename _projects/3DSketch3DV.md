@@ -20,7 +20,7 @@ At last, we compare the common multi-view and volumetric approaches:
 We show that, in contrast to a 3D shape retrieval from a reference 3D shape,  volumetric point-based approaches exhibit superior performance for a retrieval from a reference 3D sketch due to the sparse and abstract nature of 3D VR-sketches.
 We believe these contributions will collectively serve as enablers for future attempts at this problem.
 
-### Dataset Visualization
+## Dataset Visualization
 
 
 
