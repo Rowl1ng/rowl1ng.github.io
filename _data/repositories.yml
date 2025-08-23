@@ -1,14 +1,13 @@
 github_users:
-  - torvalds
-  - alshedivat
+  - rowl1ng
 
 repo_description_lines_max: 2
 
 github_repos:
-  - alshedivat/al-folio
-  - jekyll/jekyll
-  - twbs/bootstrap
-  - jquery/jquery
-  - FortAwesome/Font-Awesome
-  - mathjax/MathJax
-  - jpswalsh/academicons
+  - Rowl1ng/3Dsketch2shape
+  - Rowl1ng/Structure-Aware-VR-Sketch-Shape-Retrieval
+  - Rowl1ng/Fine-Grained_VR_Sketching
+  - ygryadit/Towards3DVRSketch
+  - Rowl1ng/SketchyVR
+  - Rowl1ng/rasa_wechat
+

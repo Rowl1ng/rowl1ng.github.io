@@ -1,0 +1,34 @@
+<div class="col">
+  <a href="{% if course.redirect %}{{ course.redirect }}{% else %}{{ course.url | relative_url }}{% endif %}">
+    <div class="card h-100 hoverable">
+      {% if course.img %}
+        {%
+          include figure.liquid
+          loading="eager"
+          path=course.img
+          sizes = "250px"
+          alt="course thumbnail"
+          class="card-img-top"
+        %}
+      {% endif %}
+      <div class="card-body">
+        <h2 class="card-title">{{ course.title }}</h2>
+        {% if course.semester or course.credits %}
+          <h6 class="card-subtitle mb-2 text-muted">
+            {% if course.semester %} {{ course.semester }} {% endif %}
+            {% if course.semester and course.credits %} · {% endif %}
+            {% if course.credits %} {{ course.credits }} credits {% endif %}
+          </h6>
+        {% endif %}
+        <p class="card-text">{{ course.description }}</p>
+        <div class="row ml-1 mr-1 p-0">
+          {% if course.link %}
+            <div class="icon" data-toggle="tooltip" title="Course Website">
+              <a href="{{ course.link }}"><i class="fa-solid fa-link"></i></a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </a>
+</div>
