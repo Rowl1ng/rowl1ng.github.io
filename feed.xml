@@ -1,0 +1,2796 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.4.1">Jekyll</generator><link href="https://rowl1ng.com/feed.xml" rel="self" type="application/atom+xml" /><link href="https://rowl1ng.com/" rel="alternate" type="text/html" hreflang="en" /><updated>2025-08-24T09:33:11+00:00</updated><id>https://rowl1ng.com/feed.xml</id><title type="html">Ling Luo</title><subtitle>Academic blog focused on computer vision, graphics, and sketch-based 3D generation with AI.</subtitle><entry><title type="html">VR Sketch Development Log</title><link href="https://rowl1ng.com/posts/2020/SketchVR/" rel="alternate" type="text/html" title="VR Sketch Development Log" /><published>2020-01-22T14:00:00+00:00</published><updated>2020-01-22T14:00:00+00:00</updated><id>https://rowl1ng.com/posts/2020/SketchVR</id><content type="html" xml:base="https://rowl1ng.com/posts/2020/SketchVR/"><![CDATA[<h1 id="raw-materials">Raw Materials</h1>
+
+<ul>
+  <li>Devices:
+    <ul>
+      <li>Oculus Rift: headset + handset x 2 + sensor x 2</li>
+      <li>Dell desktop with Nvidia 1070 GPU
+        <ul>
+          <li>System： Windows 10</li>
+          <li>Development Software：Unity 2019.2.17f1 + Visual Studio 2019</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Language: C#</li>
+</ul>
+
+<p>Actually it is not only a sketch game. it can also be used for viewing 3D models (For example, VR online shopping for furnitures!). If you are inrerested, it can be further developed into a 3D prototyping tool after adding editing function.</p>
+
+<h1 id="data-preparation">Data Preparation</h1>
+
+<p>In this game, players need to sketch the outline of the reference model. So our first task is to prepare our reference dataset. Here I list two most commonly used dataset:</p>
+
+<ul>
+  <li>Modelnet40, which contains 12311 uniformly orientated <code class="language-plaintext highlighter-rouge">.off</code> format models from 40 categories,
+    <ul>
+      <li>To make them compatible with Unity and easy to use, I normalize these models first and then convert them to <code class="language-plaintext highlighter-rouge">.obj</code> format. The normalization is composed of two steps:
+        <ol>
+          <li>translate to origin</li>
+          <li>scale to unit
+Now we can assure that every model imported has the same origin and scale. Then I use <code class="language-plaintext highlighter-rouge">pyassimp</code> to save them as <code class="language-plaintext highlighter-rouge">.obj</code> file.</li>
+        </ol>
+      </li>
+    </ul>
+  </li>
+  <li>ShapeNetCore v1: It contains 6778 <code class="language-plaintext highlighter-rouge">.obj</code> chair models.</li>
+</ul>
+
+<h1 id="how-to-draw-a-line-in-vr">How to draw a line in VR?</h1>
+
+<p>The answer lies in the <code class="language-plaintext highlighter-rouge">PointLineManager.cs</code>. When pressing the trigger on your controller while moving it. The script will record the position of the controller and use it as new point of the line.</p>
+
+<p>A basic implementation is to use <code class="language-plaintext highlighter-rouge">LineRenderer</code>. When player keep pressing the trigger we just keep adding new points to the current LineRenderer using the coordinate of contoller.</p>
+
+<p>Another way is to use <code class="language-plaintext highlighter-rouge">MeshLineRenderer.cs</code>. Different form the former, it will create a new mesh which not only has vertices but also has triangle faces. So in this way you can save your sketch as obj while the <code class="language-plaintext highlighter-rouge">LineRenderer</code> which doesn’t have meshes can only be saved as .off file.</p>
+
+<h1 id="basics-of-unity">Basics of Unity</h1>
+
+<p>Unity has two modes: Editor &amp; Build. In my practice, I found some functions can only run normally inside Editor mode. For example,  <code class="language-plaintext highlighter-rouge">AssetDatabase</code> is from <code class="language-plaintext highlighter-rouge">UnityEditor</code> namespace which is unavailable in build version. Here is a <a href="https://stackoverflow.com/questions/40064746/the-type-or-namespace-name-unityeditor-could-not-be-found">Solution on StackOverflow</a>.</p>
+
+<h2 id="scene">Scene</h2>
+
+<p>If you create an Unity 3D project from scratch, you will start from a defaulted scene where you can create any gameobject you want. In this VR project, we hope to collect some settings before players start to sketch, so we add a 2D start scene before the VR scene.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+</code></pre></div></div>
+
+<p>To select filepath and directory as saving path and model path, one choice is official FileDialog API <code class="language-plaintext highlighter-rouge">EditorUtility.OpenFilePanel</code> , but it can only be used in Editor mode. In build mode, we choose <code class="language-plaintext highlighter-rouge">StandaloneFileBrowser</code> Asset as substitute. You can search and import this asset in Unity asset store.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>PlayerManager.save_dir = StandaloneFileBrowser.OpenFolderPanel("Select Save Folder", "", true)[0];
+
+PlayerManager.namelist_path = StandaloneFileBrowser.OpenFilePanel("Open Namelist File", "", "txt", true)[0];
+
+</code></pre></div></div>
+
+<h2 id="gameobject">GameObject</h2>
+
+<p>Unity has two “kinds” of gameobject: “Real” physical object &amp; “virtual” script. If you want your script to function during the game, you can create an <code class="language-plaintext highlighter-rouge">Empty Object</code> and bind your script to it through <code class="language-plaintext highlighter-rouge">Add Component</code>.</p>
+
+<p>If you want to operate on other object in current script. you can use <code class="language-plaintext highlighter-rouge">GameObject.Find("the name of other object")</code></p>
+
+<p>If you want to operate on other script in current script. you can use <code class="language-plaintext highlighter-rouge">MyObject.GetComponent&lt;YourScriptName&gt;()</code></p>
+
+<h2 id="file-io">File I/O</h2>
+
+<ol>
+  <li>How to import .obj files into the game?</li>
+</ol>
+
+<p>Search for <a href="https://assetstore.unity.com/packages/tools/modeling/runtime-obj-importer-49547#reviews">Runtime OBJ Importer</a> in Asset Store. Remenber to read the Readme file: You must go to the “Graphics” tab on the right side of Unity Editor, and add “Standard (Specular Setup)” to the <code class="language-plaintext highlighter-rouge">always included shaders</code>. This will make your next build take a while</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>targetPath = "absolute path"
+loadedObject = new OBJLoader().Load(targetPath);
+</code></pre></div></div>
+
+<p>Another way is to use <code class="language-plaintext highlighter-rouge">Resources.Load()</code> to load .obj file in build mode. In this case, all model files should lie in <code class="language-plaintext highlighter-rouge">/Resources</code> directory （You can put<code class="language-plaintext highlighter-rouge">/Resources</code> directory under any subdirectory of your project）. But I found some models are displayed abnormally in this method.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>targetpath = "path under Resources directory"
+loadedObject = Instantiate(Resources.Load(targetPath) as GameObject);
+
+</code></pre></div></div>
+
+<ol>
+  <li>How to save sketch?</li>
+</ol>
+
+<p>I implemented two methods to save sketch:</p>
+
+<ul>
+  <li>export whole multiple lines as single mesh file, which has both vertices and triangle meshes.</li>
+  <li>save sketch as trajectory：.off file with points coordinate only.</li>
+</ul>
+
+<p>Meanwhile, we also save timestamps of strokes: a list of (x,y,z,timestamp)</p>
+
+<p>In editor mode, it is defaulted to save 3 types of files: model+sketch, sketch, model. But in buld version, we only save sketch since meshes loaded by Resources is unallowed to be read or saved.</p>
+
+<h3 id="worldposition-vs-localposition">WorldPosition vs. LocalPosition</h3>
+
+<p>Since you are not sure the position you are processing is local or World position, the safest way is to transform them into world position first and then do whatever you want.</p>
+
+<p>For example, I need to save vertices of both sketch and model in one single obj file. So, to make sure they share the same coordinate system I first convert their position into world position <code class="language-plaintext highlighter-rouge">wv</code> and then to relative position <code class="language-plaintext highlighter-rouge">rv</code>.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Vector3 wv = mf.transform.TransformDirection(lv);
+Vector3 rv = space.transform.InverseTransformDirection(wv);
+</code></pre></div></div>
+
+<h1 id="vr-development-oculus-rift">VR development (Oculus Rift)</h1>
+
+<p>Go to asset store and import <code class="language-plaintext highlighter-rouge">Oculus</code> asset.</p>
+
+<p>Get input from controller:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float RI = OVRInput.Get(OVRInput.Axis1D.SecondaryIndexTrigger); //IndexTrigger on right hand controller
+bool undoX = OVRInput.GetDown(OVRInput.RawButton.X); //X button on left controller
+</code></pre></div></div>
+
+<p><img src="https://docs.unity3d.com/uploads/Main/OculusControllersTouchControllers.jpg" alt="此处输入图片的描述" /></p>
+
+<p><a href="https://docs.unity3d.com/Manual/OculusControllers.html">More information about Input for Oculus</a></p>
+
+<h2 id="vr-uis">VR UIs</h2>
+
+<p>We can still use traditional <code class="language-plaintext highlighter-rouge">Canvas</code> inside VR. But to interact with canvas, mouse activity for 2D display should be replaced by <code class="language-plaintext highlighter-rouge">LaserPointer</code> for VR, which you can utilize easily by importing <code class="language-plaintext highlighter-rouge">UIHelper</code> prefab from Oculus Asset as a gameobject .</p>
+
+<p>Tutorial: <a href="https://arvrjourney.com/how-to-build-vr-uis-with-unity-and-oculus-rift-part-2-69e31b32dd82">how to build vr uis with unity and oculus rift part 2</a></p>
+
+<h2 id="grabrotate-objects">Grab/Rotate Objects</h2>
+
+<p>Add <code class="language-plaintext highlighter-rouge">OVR Grabbable</code> script to the object with <code class="language-plaintext highlighter-rouge">Rigid</code> and <code class="language-plaintext highlighter-rouge">Collider</code> component that you want to manipulate. And you can use your handtrigger to grab and rotate them.</p>
+
+<p>For example, in this game I put both sketch and model under the same parent gameobject <code class="language-plaintext highlighter-rouge">space</code>, which means I only need to add <code class="language-plaintext highlighter-rouge">OVR Grabbable</code> script to <code class="language-plaintext highlighter-rouge">space</code> to manipulate both the sketch and model.</p>
+
+<h2 id="ovrcamerarig">OVRCameraRig</h2>
+
+<p>The <code class="language-plaintext highlighter-rouge">OVRCameraRig</code> prefab from Oculus Asset contains the camera for VR and two hand controller gameobjects. You can customize any controller operation with it easily. In my case, I attached a ColorPicker to left-hand controller.</p>
+
+<h1 id="other-functions">Other Functions</h1>
+
+<ul>
+  <li>ColorPicker: Modified from <code class="language-plaintext highlighter-rouge">SimpleColorPicker</code> Asset. Main modification is to transfer interaction from mouse drag to laserpoint drag, which is implemented in <code class="language-plaintext highlighter-rouge">Draggble.cs</code> under SimpleColorPicker/Script.</li>
+  <li>CountDown: <code class="language-plaintext highlighter-rouge">CountDownScript</code></li>
+</ul>
+
+<h1 id="tutorials">Tutorials</h1>
+
+<ul>
+  <li><a href="https://www.youtube.com/channel/UCPJlesN59MzHPPCp0Lg8sLw">Making VR game in Unity</a></li>
+  <li><a href="https://www.youtube.com/watch?v=eMJATZI0A7c">Unity VR Tutorial: How To Build Tilt Brush From Scratch</a></li>
+  <li>Basics of 3D graphics: Details are listed in <a href="https://rowl1ng.com/MyWiki/computer-graphics/3d-model.html">my wiki</a>.</li>
+</ul>
+
+<h1 id="comments">Comments</h1>
+
+<ul>
+  <li>
+    <p>Oculus’s development ecosystem is not friendly enough for beginners nowadays. Resources for steamVR seems better，at least it has more tutorials on youtube. But I finally returned to Oculus integration after having some input trouble with steamvr.</p>
+
+  </li>
+</ul>]]></content><author><name></name></author><category term="3D" /><category term="Vision" /><category term="VR" /><category term="Unity" /><summary type="html"><![CDATA[VR Development]]></summary></entry><entry><title type="html">Detectron代码分析：从Faster R-CNN 到 Mask R-CNN</title><link href="https://rowl1ng.com/posts/2018/faster-rcnn/" rel="alternate" type="text/html" title="Detectron代码分析：从Faster R-CNN 到 Mask R-CNN" /><published>2018-03-22T17:00:00+00:00</published><updated>2018-03-22T17:00:00+00:00</updated><id>https://rowl1ng.com/posts/2018/faster-rcnn</id><content type="html" xml:base="https://rowl1ng.com/posts/2018/faster-rcnn/"><![CDATA[<p><a href="https://github.com/facebookresearch/Detectron">Detectron</a>（使用caffe2）是face book开源的的各种目标检测算法的打包（比如mask rcnn、FPN的）。
+本文mask rcnn的部分基于pytorch实现的一版Detectron：<a href="https://github.com/roytseng-tw/Detectron.pytorch">Detectron.pytorch</a>（参考了<a href="https://github.com/jwyang/faster-rcnn.pytorch">Faster R-CNN的pytorch实现</a>），</p>
+
+<p>需要安装：</p>
+
+<ul>
+  <li>pytorch &gt; 0.3.0</li>
+  <li>pycocotools</li>
+  <li>easydict</li>
+  <li>cython</li>
+  <li>cffi</li>
+</ul>
+
+<h1 id="基本概念">基本概念</h1>
+
+<ul>
+  <li>IOU
+<img src="https://s2.loli.net/2025/08/18/1zIflv7upesVXYb.png" alt="img_5aa6f476535f7.png-13.4kB" /></li>
+  <li>先明确foreground和background的概念：前景<code class="language-plaintext highlighter-rouge">fg</code>（foreground）代表有物体（不管是哪个类别），背景<code class="language-plaintext highlighter-rouge">bg</code>（background）就是没有任何物体。</li>
+</ul>
+
+<h1 id="代码结构">代码结构</h1>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- tools
+    - train_net.py: 训练
+    - test_net.py: 测试
+- configs
+    - 各种网络的配置文件.yml
+- lib
+    - core：
+        - config.py: 定义了通用型rcnn可能用到的所有超参
+        - test_engine.py: 整个测试流程的控制器
+        - test.py
+    - dataset: 原始数据IO、预处理
+        - your_data.py：在这里定义你自己的数据、标注读取方式
+        - roidb.py
+    - roi_data：数据工厂，根据config的网络配置生成需要的各种roi、anchor等
+        - loader.py
+        - rpn.py: 生成RPN需要的blob
+        - data_utils.py: 生成anchor
+    - modeling: 各种网络插件，rpn、mask、fpn等
+        - model_builder.py：构造generalized rcnn
+        - ResNet.py: Resnet backbone相关
+        - FPN.py：RPN with an FPN backbone
+        - rpn_heads.py：RPN and Faster R-CNN outputs and losses
+        - mask_rcnn_heads：Mask R-CNN outputs and losses
+    - utils：小工具
+</code></pre></div></div>
+
+<h1 id="数据输入">数据输入</h1>
+
+<h2 id="图像预处理">图像预处理</h2>
+
+<p>原项目的<code class="language-plaintext highlighter-rouge">lib/datasets</code>中提供了imagenet、COCO等通用数据集的调用类，如果想使用自己的数据的话就需要仿照着设计yourdata.py。几个要注意的点：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">_classes</code>：所有框的类别，比较特殊的就是<code class="language-plaintext highlighter-rouge">__background__</code></li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># Pascal_VOC
+self._classes = ('__background__',  # always index 0
+                 'aeroplane', 'bicycle', 'bird', 'boat',
+                 'bottle', 'bus', 'car', 'cat', 'chair',
+                 'cow', 'diningtable', 'dog', 'horse',
+                 'motorbike', 'person', 'pottedplant',
+                 'sheep', 'sofa', 'train', 'tvmonitor')
+</code></pre></div></div>
+<ul>
+  <li>关键要修改的函数就是<code class="language-plaintext highlighter-rouge">_load_XXX_annotation(self, index)</code>（XXX是你的数据集的名字），要实现的功能就是给定image的index，返回所有的bounding box标注。
+    <ul>
+      <li>返回的roidb长这样：
+        <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  return {'width': width,
+      'height': height,
+      'boxes': np.array(boxes),
+      'gt_classes': np.array(gt_classes),
+      'gt_overlaps': overlaps,
+      'flipped': False, # 用于data augmentation
+      'seg_areas': np.array(seg_areas)}
+ # 得到roidb之后还会计算：
+ 'max_classes' # 和哪个class重合最大？
+ 'max_overlaps' # 和该class重合率[0,1]
+ # 后面的采样环节会用到
+</code></pre></div>        </div>
+      </li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">gt_overlaps</code>：有些数据集（比如COCO）中一个bbox囊括了好几个对象，称之为<code class="language-plaintext highlighter-rouge">crowd box</code>，训练时需要把他们移除，移除的手段就是把它们的overlap (with all categories)设为负值（比如-1）。</li>
+  <li><code class="language-plaintext highlighter-rouge">seg_areas</code>: mask rcnn根据segment的区域大小排序</li>
+</ul>
+
+<p>说一下<a href="https://github.com/roytseng-tw/Detectron.pytorch/blob/9294ec13d4a59cf449b09e1ada72a56b3420249c/lib/datasets/roidb.py">dataset/roidb.py</a>这个文件，里面最重要的就是<code class="language-plaintext highlighter-rouge">combined_roidb_for_training</code>，它是训练数据的“组装车间”，当需要同时训练多个数据集时尤为方便。通过调用每个数据集的get_roidb()方法获得各个数据集的roidb，并对相应数据集进行augmentation，这里主要是横向翻转（flipped），最后返回的是augmentation后打包在一起的roidb（前半部分是原始图像+标注，后半部分是原始图像+翻转后的标注）。</p>
+
+<ul>
+  <li>减去的均值是固定的\(3 \times 1\)向量（对train和test都是一样）；</li>
+  <li>Agmentation: 默认是Horizontal Flip（可以仿照加Vertically Flip）</li>
+  <li>控制训练时每块GPU上每个minibatch的ratio都相同:TRAIN.<code class="language-plaintext highlighter-rouge">ASPECT_GROUPING</code> = True</li>
+  <li>计算bbox regrssion \(\delta\)。需要的关键文件：<a href="https://github.com/roytseng-tw/Detectron.pytorch/blob/9294ec13d4a59cf449b09e1ada72a56b3420249c/lib/utils/boxes.py">utils/boxes.py</a>
+    <ul>
+      <li>bbox_transform_inv：通过proposal box和groundtruth box 计算bbox regrssion \(\delta\)</li>
+      <li>MODEL.<code class="language-plaintext highlighter-rouge">BBOX_REG_WEIGHTS</code> :加权用，默认是(10., 10., 5., 5.)</li>
+    </ul>
+  </li>
+</ul>
+
+<p><a href="https://github.com/roytseng-tw/Detectron.pytorch/blob/9294ec13d4a59cf449b09e1ada72a56b3420249c/lib/roi_data/loader.py">roi_data/loader.py</a>中的RoiDataLoader对上面处理完的roidb“加工”成 data，主要通过get_minibatch获得某张图的一个minibatch。可以看minibatch.py的实现。首先会初始化所需blob的name list，比如FPN对应的list如下：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>['roidb',
+'data', # （1，3，2464，2016）
+'im_info',
+
+'rpn_labels_int32_wide_fpn2', # （1，3，752，752）
+'rpn_labels_int32_wide_fpn3', # （1，3，376，376）
+'rpn_labels_int32_wide_fpn4',  # （1，3，188，188）
+'rpn_labels_int32_wide_fpn5', # （1，3，94，94）
+'rpn_labels_int32_wide_fpn6', # （1，3，47，47）
+
+'rpn_bbox_targets_wide_fpn2', # （1，12，752，752）
+'rpn_bbox_targets_wide_fpn3',
+'rpn_bbox_targets_wide_fpn6',
+'rpn_bbox_targets_wide_fpn4',
+'rpn_bbox_targets_wide_fpn5',
+
+'rpn_bbox_outside_weights_wide_fpn2', # （1，12，752，752）
+'rpn_bbox_outside_weights_wide_fpn3',
+'rpn_bbox_outside_weights_wide_fpn4',
+'rpn_bbox_outside_weights_wide_fpn5',
+'rpn_bbox_outside_weights_wide_fpn6',
+
+'rpn_bbox_inside_weights_wide_fpn6',
+'rpn_bbox_inside_weights_wide_fpn5',
+'rpn_bbox_inside_weights_wide_fpn4',
+'rpn_bbox_inside_weights_wide_fpn3',
+'rpn_bbox_inside_weights_wide_fpn2'] # （1，12，752，752）
+</code></pre></div></div>
+
+<p>在获得list后，使用<a href="https://github.com/facebookresearch/Detectron/blob/e5bb3a8ff0b9caf59c76037726f49465d6b9678b/detectron/roi_data/rpn.py">roi_data/rpn.py</a>的add_rpn_blobs来填上对应的blob。<code class="language-plaintext highlighter-rouge">_get_rpn_blobs</code>的流程：</p>
+
+<ul>
+  <li>生成anchor</li>
+  <li>TRAIN.<code class="language-plaintext highlighter-rouge">RPN_STRADDLE_THRESH</code>：筛除超出image范围的RPN anchor，默认是0.</li>
+  <li>计算anchor label： positive：label=1； negative：label=0；don’t care: label=-1
+    <ul>
+      <li>计算anchor和gt box的overlap
+        <ul>
+          <li>Fg label（positive）：和每个gt重合率最大的那个anchor；超过TRAIN.<code class="language-plaintext highlighter-rouge">RPN_POSITIVE_OVERLAP</code>的anchor</li>
+        </ul>
+      </li>
+      <li>控制数量，采样positive 和 nagative label，超过的将label设为-1
+        <ul>
+          <li>fg/正样本：
+            <ul>
+              <li>总数 = <code class="language-plaintext highlighter-rouge">TRAIN.FG_FRACTION</code> * <code class="language-plaintext highlighter-rouge">TRAIN.BATCH_SIZE_PER_IM</code></li>
+              <li>条件：&gt; <code class="language-plaintext highlighter-rouge">TRAIN.FG_THRESH</code>，随机选择达到条件的fg，数量&lt;=总数：fg_inds = np.where(<code class="language-plaintext highlighter-rouge">max_overlaps</code> &gt;= cfg.<code class="language-plaintext highlighter-rouge">TRAIN.FG_THRESH</code>)[0]</li>
+            </ul>
+          </li>
+          <li>bg/负样本：
+            <ul>
+              <li>总数 = <code class="language-plaintext highlighter-rouge">TRAIN.BATCH_SIZE_PER_IM</code> - 正样本总数</li>
+              <li>条件:[<code class="language-plaintext highlighter-rouge">BG_THRESH_LO</code>, <code class="language-plaintext highlighter-rouge">BG_THRESH_HI</code>)</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>bbox regression loss:loss(x) = weight_outside * L(weight_inside * x)
+    <ul>
+      <li>bbox_inside_weights: bbox regression只用positive example来训，所以只需把positive的weight设为1.0，其他设为0即可（只有那些分类正确了的box才能参与，分类错误的直接不考虑了）</li>
+      <li>bbox_outside_weights: bbox regression loss是对minibatch中的图片数取平均，</li>
+    </ul>
+  </li>
+</ul>
+
+<blockquote>
+  <p>着部分的逻辑可以看作是确保bg和fg的样本数量之和是一个常数。万一找到的bg样本太少，就随机重复一些来填补que
+Bbox regression loss has the form:
+    # Inside weights allow us to set zero loss on an element-wise basis
+    # Bbox regression is only trained on positive examples so we set their
+    # weights to 1.0 (or otherwise if config is different) and 0 otherwise</p>
+</blockquote>
+
+<blockquote>
+  <p>代码实现上：使用了mask array将for循环操作转化成了矩阵乘法。mask array标注了每个anchor的正确物体类别。</p>
+</blockquote>
+
+<h2 id="正负采样">正负采样</h2>
+
+<p>关键文件：<a href="https://github.com/roytseng-tw/Detectron.pytorch/blob/9294ec13d4a59cf449b09e1ada72a56b3420249c/lib/roi_data/minibatch.py">roi_data/minibatch.py</a></p>
+
+<ul>
+  <li>考虑到一块gpu的显存有限，我们往往需要将图像rescale的一定大小。 <code class="language-plaintext highlighter-rouge">targetSize</code> 和 <code class="language-plaintext highlighter-rouge">maxSize</code> 默认是 600 和 1000 ，根据显存大小和图片大小来设计就好（比如最长边限制在2100或者短边是1700的时候一块gpu只能跑一个sample）。
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">TRAIN.SCALES</code>：一个list，默认是[600,]，如果有多个值，在采样的时候是随机分配给image的：<code class="language-plaintext highlighter-rouge">np.random.randint(0, high=len(cfg.TRAIN.SCALES), size=num_images)</code></li>
+    </ul>
+  </li>
+</ul>
+
+<p>关键文件： <a href="https://github.com/roytseng-tw/Detectron.pytorch/blob/9294ec13d4a59cf449b09e1ada72a56b3420249c/lib/roi_data/fast_rcnn.py">roi_data/fast_rcnn.py</a></p>
+
+<ul>
+  <li>_sample_rois：随机采样fg/bg examples，控制数量的方法和之前一样</li>
+</ul>
+
+<p>Rescale的基本逻辑如下图：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/9flbPnTyiDQeOd6.png" alt="rescale" /></p>
+
+<p>这一步在<strong>决定使用的anchor size</strong>时一定要考虑进去，github上有人写过基于自己数据的分析脚本，基本思路是还原rescale的过程，分析rescale factor，估计一下roi的大小，从而决定anchor size。</p>
+
+<p>计算所有ROI和所有ground truth的max overlap，从而判断是fg还是bg。这里用到了两个参数：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.FG_THRESH</code>：用来判断fg ROI（default：0.5）</li>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.BG_THRESH_LO</code> ~ <code class="language-plaintext highlighter-rouge">TRAIN.BG_THRESH_HI</code>：这个区间的是bg ROI。(default 0.1, 0.5 respectively)</li>
+</ul>
+
+<p>这样的设计可以看作是 “hard negative mining” ，用来给classifier投喂更难的bg样本。</p>
+
+<p>输入:</p>
+
+<ul>
+  <li>proposal layer得到的ROIs</li>
+  <li>ground truth information</li>
+</ul>
+
+<p>输出:</p>
+
+<ul>
+  <li>选出满足overlap要求的bg、fg的ROI。</li>
+  <li>每个roi针对不同类别的regression coefficients。</li>
+</ul>
+
+<p>Parameters:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.BATCH_SIZE</code>: (default 128) 所选fg和bg box的最大数量.</li>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.FG_FRACTION</code>: (default 0.25). fg box 不能超过 BATCH_SIZE*FG_FRACTION</li>
+</ul>
+
+<h1 id="generalized-rcnn结构">Generalized RCNN结构</h1>
+
+<p>R-CNN包括三种主要网络：</p>
+
+<ol>
+  <li>Head：输入(w,h,3)生成feature map，降采样了16倍； w和h是预处理以后的图片大小哦</li>
+  <li>Region Proposal Network (RPN)：基于feature map，预测ROI；
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">Crop Pooling</code>：从feature map中crop相应位置</li>
+    </ul>
+  </li>
+  <li>Classification Network：对crop出的区域进行分类。</li>
+</ol>
+
+<p>在pytorch版Detectron中，<a href="https://github.com/roytseng-tw/Detectron.pytorch/blob/9294ec13d4a59cf449b09e1ada72a56b3420249c/lib/modeling/model_builder.py">medeling/model_builder.py</a>中的<code class="language-plaintext highlighter-rouge">generalized_rcnn</code>将FPN、fast rcnn、mask rcnn作为“插件”，通过config文件中控制“插拔”。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>MODEL:
+  TYPE: generalized_rcnn
+  CONV_BODY: FPN.fpn_ResNet50_conv5_body # backbone
+  FASTER_RCNN: True # RPN ON
+  MASK_ON: True # 使用mask支线：mask rcnn除了box head，还有一个mask head。
+</code></pre></div></div>
+
+<p>在Detectron的实现里，可以像上面这样在config文件中灵活选择使用的backbone（比如conv body使用Res50_conv4,roi_mask_head和box head共同使用fcn_head）。代码模块划分：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">Conv_Body</code> 对应下图中的head: 输入im_data，返回blob_conv</li>
+  <li><code class="language-plaintext highlighter-rouge">RPN</code> 对应下图中的Region Proposal Network: loss_rpn_cls + loss_rpn_bbox # 输入blob_conv，返回rpn_ret;</li>
+  <li><code class="language-plaintext highlighter-rouge">BBOX_Branch</code>：loss_rcnn_cls + loss_rcnn_bbox
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">Box_Head</code> 对应下图中的Generate Grid Points Sample Feature Maps + Layer4 # 输入conv_body, rpn_ret返回box_feat
+        <ul>
+          <li>通过FAST_RCNN.ROI_BOX_HEAD设置</li>
+        </ul>
+      </li>
+      <li><code class="language-plaintext highlighter-rouge">Box_Outs</code> 对应下图中的cls_score_net + bbx_pred_net# 输入box_feat, 返回cls_score, bbox_pred, 计算loss_cls, loss_bbox</li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">Mask_Branch</code>: loss_rcnn_mask
+    <ul>
+      <li>Mask_Head# 输入blob_conv, rpn_net, 返回mask_feat
+        <ul>
+          <li>通过MRCNN.ROI_MASK_HEAD设置</li>
+        </ul>
+      </li>
+      <li>Mask_Outs# 输入mask_feat，返回mask_pred</li>
+    </ul>
+  </li>
+</ul>
+
+<p><img src="https://s2.loli.net/2025/08/18/JeoKjQMNW2d1Hb5.png" alt="network architecture" /></p>
+
+<p>先来看看Head怎么得到feature map。拿VGG16作为backbone来举例的话，一个完整的VGG16网络长这样：</p>
+
+<p><img src="https://tryolabs.com/images/blog/post-images/2018-01-18-faster-rcnn/vgg.b6e48b99.png" alt="VGG16" /></p>
+
+<p>其中红色部分就是下采样的时刻。原始论文里使用VGG16，因为提feature map只用了最后一次max pooling前面的部分，所以留下来的四次pooling总共下采样是16倍。得到的feature map长这样：</p>
+
+<p><img src="https://tryolabs.com/images/blog/post-images/2018-01-18-faster-rcnn/image-to-feature-map.89f5aecb.png" alt="under sampling" /></p>
+
+<p>最终的feature映射回原图的话大概长这样：</p>
+
+<p><img src="https://tryolabs.com/images/blog/post-images/2018-01-18-faster-rcnn/anchors-centers.141181d6.png" alt="此处输入图片的描述" /></p>
+
+<p>有了feature map以后，开始走RCNN的主体流程：</p>
+
+<h2 id="backbone">Backbone</h2>
+
+<p>在初始化generalized rcnn时，首先要选择backbone（也许可以意译为“骨干网”）。通过cfg.MODEL.<code class="language-plaintext highlighter-rouge">CONV_BODY</code>即可选择backbone：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>self.Conv_Body = get_func(cfg.MODEL.CONV_BODY)() # 如果是FPN，会在这一步直接基于backbone完成FPN的构造
+</code></pre></div></div>
+
+<h3 id="resnet">Resnet</h3>
+
+<p>Resnet.py打包了各种resnet的backbone，比如ResNet50_conv5_body：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def ResNet50_conv5_body():
+    return ResNet_convX_body((3, 4, 6, 3)) # block_counts: 分别对应res2、res3、res4、res5
+</code></pre></div></div>
+<p><img src="https://s2.loli.net/2025/08/18/t5L78rlX9Aiu1ns.png" alt="img_5aa59c8da4c4b.png-50.2kB" /></p>
+
+<p>Resnet中的Bottleneck：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/lnR7DHVbYzUAj2h.png" alt="bottleneck" /></p>
+
+<h3 id="fpn">FPN</h3>
+
+<p><a href="https://arxiv.org/pdf/1612.03144.pdf">原始论文</a></p>
+
+<p>可以选择是否用于RoI transform，是否用于RPN：</p>
+
+<ol>
+  <li><strong>feature extraction</strong>：fpn.py中的fpn类将backbone“加工”为FPN。比如当config里的CONV_BODY: FPN.fpn_ResNet50_conv5_body，实际要做的就是先初始化Resnet.ResNet50_conv5_body，再交给fpn得到fpn_ResNet50_conv5_body。</li>
+  <li><strong>RPN with FPN backbone</strong>: 如果rpn使用FPN，那么FPN的每个level都会做RPN，生成相应大小的anchor，返回相应的cls_score和bbox_pred。rpn_heads,FPN.fpn_rpn_outputs</li>
+</ol>
+
+<p><img src="https://s2.loli.net/2025/08/18/ps6X4JYSIatzQg8.png" alt="image_1c8u6egich3e1ha41d3o1m22s3g16.png-228.8kB" /></p>
+
+<p><img src="https://s2.loli.net/2025/08/18/7XSvMwEWCGstUyg.png" alt="image_1c8u6f7esu9i1sl510hs1pnm1qvl1j.png-30.8kB" /></p>
+
+<p><img src="https://s2.loli.net/2025/08/18/PI3Fj5oO9Dv41mA.png" alt="fpn_rpn.png-206.4kB" /></p>
+
+<p><img src="https://s2.loli.net/2025/08/18/qK3pwTcC8SaxGNJ.jpg" alt="fpn_faster_rcnn.jpeg-43.5kB" />
+可以看到降采样从P5到P2是(1. / 32., 1. / 16., 1. / 8., 1. / 4.)</p>
+
+<p>选择：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">FPN.EXTRA_CONV_LEVELS</code> ：可以选择是否加上P6，即最上层stride2的降采样后的Output，这样降采样就还加上 1. / 64.</li>
+  <li>P2Only：选择是否只使用P2的Output</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># FPN is enabled if True
+__C.FPN.FPN_ON = False
+
+# Channel dimension of the FPN feature levels
+__C.FPN.DIM = 256
+
+# Initialize the lateral connections to output zero if True
+__C.FPN.ZERO_INIT_LATERAL = False
+
+# Stride of the coarsest FPN level
+# This is needed so the input can be padded properly
+__C.FPN.COARSEST_STRIDE = 32
+
+#
+# FPN may be used for just RPN, just object detection, or both
+#
+
+# Use FPN for RoI transform for object detection if True
+__C.FPN.MULTILEVEL_ROIS = False
+# Hyperparameters for the RoI-to-FPN level mapping heuristic
+__C.FPN.ROI_CANONICAL_SCALE = 224  # s0
+__C.FPN.ROI_CANONICAL_LEVEL = 4  # k0: where s0 maps to
+# Coarsest level of the FPN pyramid
+__C.FPN.ROI_MAX_LEVEL = 5
+# Finest level of the FPN pyramid
+__C.FPN.ROI_MIN_LEVEL = 2
+
+# Use FPN for RPN if True
+__C.FPN.MULTILEVEL_RPN = False
+# Coarsest level of the FPN pyramid
+__C.FPN.RPN_MAX_LEVEL = 6
+# Finest level of the FPN pyramid
+__C.FPN.RPN_MIN_LEVEL = 2
+# FPN RPN anchor aspect ratios
+__C.FPN.RPN_ASPECT_RATIOS = (0.5, 1, 2)
+# RPN anchors start at this size on RPN_MIN_LEVEL
+# The anchor size doubled each level after that
+# With a default of 32 and levels 2 to 6, we get anchor sizes of 32 to 512
+__C.FPN.RPN_ANCHOR_START_SIZE = 32
+# Use extra FPN levels, as done in the RetinaNet paper
+__C.FPN.EXTRA_CONV_LEVELS = False
+
+</code></pre></div></div>
+
+<p>其他<a href="https://github.com/jwyang/fpn.pytorch">FPN的Pytorch实现</a>。</p>
+
+<h2 id="1-anchor-generation-layer">1. Anchor Generation Layer</h2>
+
+<p>第一步就是生成anchor（<code class="language-plaintext highlighter-rouge">lib/modeling/generate_anchors.py</code>），这里的anchor亦可理解为bounding box。Anchor Generation Layer的任务是对feature map上的每个点都计算若干anchor。而RPN的任务就是判断哪些是好的anchor（包含gt对象）并计算regression coefficients（优化anchor的位置，更好地贴合object）：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/SR4CMrbfDtcYXyU.png" alt="generate anchors" /></p>
+
+<ul>
+  <li>三种颜色分别代表128x128, 256x256, 512x512</li>
+  <li>每种颜色的三个框分别代表比例1:1, 1:2 and 2:1</li>
+  <li>每种颜色的三个框的面积是差不多的，因此，可以说最大识别框的面积是 512 x 512</li>
+</ul>
+
+<blockquote>
+  <p>anchor是RPN的windows的大小，在feature map的每一个位置使用不同尺度和长宽比的window提取特征。原论文描述为“a pyramid of regression references”。</p>
+</blockquote>
+
+<p>对应到代码上：比如<code class="language-plaintext highlighter-rouge">ANCHOR_SCALES</code>是[4, 8, 16, 32]，<code class="language-plaintext highlighter-rouge">ANCHOR_RATIOS</code>默认是[0.5,1,2]。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#imagenet
+args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+
+</code></pre></div></div>
+
+<p><img src="https://s2.loli.net/2025/08/18/DjdZaVA3h29qguz.png" alt="image_1cle4qa281hb61mdq1pl7i0mf7919.png-12.7kB" /></p>
+
+<p>但是并不是越多越好，要控制在一定的数量，理由是：</p>
+
+<ol>
+  <li>anchors多了就会造成faster RCNN的时间复杂度提高，anchors多的最极端情况就是overfeats中sliding windows。</li>
+  <li>使用多尺度的anchors未必全部对scale-invariant property都有贡献</li>
+</ol>
+
+<p>所以，在使用自己的数据的时候，统计一下gorund truth框的大小（注意考虑预处理rescale的系数），确定大小范围还是很有必要的。</p>
+
+<h2 id="2-region-proposal-layer">2. Region Proposal Layer</h2>
+
+<p>前一步生成anchor得到的是dense candidate region，rpn根据region是fg的概率来对所有region排序。</p>
+
+<p>Region Proposal Layer的两个任务就是：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">rpn_cls_score</code>:判断anchor是前景还是背景</li>
+  <li><code class="language-plaintext highlighter-rouge">rpn_bbox_pred</code>:根据<strong>regression coefficient</strong>调整anchor的位置、长宽，从而改进anchor，比如让它们更贴合物体边界。</li>
+</ul>
+
+<h3 id="21-region-proposal-network">2.1 Region Proposal Network</h3>
+
+<p><img src="https://s2.loli.net/2025/08/18/MKEsXU5ZWngvwyR.png" alt="RPN" /></p>
+
+<p>值得注意的是，这里的anchor是以降采样16倍的卷积网(called rpn_net in code)得到的feature map为基础的。</p>
+
+<p>rpn_net的输出通过两个 (1,1)核的卷积网，从而产生bg/fg的class scores以及对应的bbox的regression coefficient。head network使用的stride和生成anchor使用的stride一致，所以anchor和rpn产生的信息是一一对应的，即 number of anchor boxes = number of class scores = number of bounding box regression coefficients = \(\frac{w}{16}\times\frac{h}{16}\times9\)</p>
+
+<h3 id="22-proposal-layer">2.2 Proposal Layer</h3>
+<p>proposal layer基于anchor generation layer得到的anchor，使用nms（基于fg的score）来筛除多余的anchor。此外，它还负责将RPN得到的regression coefficients应用到对应的anchor上，从而得到transformed bbox。</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/3dgarCFWcEXm4pH.png" alt="proposal layer" /></p>
+
+<h3 id="23-anchor-target-layer">2.3 Anchor Target Layer</h3>
+
+<p>anchor target layer 的目标在于选择可靠的anchor来训练RPN：</p>
+
+<ol>
+  <li>区分bg/fg区域，</li>
+  <li>为fg box生成好的bbox regression coefficients</li>
+</ol>
+
+<p>首先看一看RPN loss的计算过程，了解其中用到的信息有助于理解Anchor Target Layer的流程。</p>
+
+<h4 id="计算rpn-loss">计算RPN loss：</h4>
+
+<p>前面提到RPN的目标是得到好的bbox，而达到这个目的的必经之路就是：1. 学会判断一个anchor是fg/bg；2. 计算regression coefficients来修正fg anchor的位置、宽、高，从而更好地贴合对象。因此， RPN Loss的计算就是为了优化以上两点：</p>
+
+\[RPN Loss = \text{Classification Loss} + \text{Bounding Box Regression Loss}\]
+
+<ul>
+  <li><strong>Classification Loss</strong>: cross_entropy(predicted _class, actual_class)</li>
+  <li><strong>Bounding Box Regression Loss</strong>:\(L_{loc} = \sum_{u \in {\text{all foreground anchors}}}l_u\)</li>
+</ul>
+
+<p>由于bg的anchor没有可以回归的target bbox，这里只对所有fg的regression loss求和。计算某个bg anchor的regression loss的方法：</p>
+
+<p>\(l_u = \sum_{i \in {x,y,w,h}}smooth_{L1}(u_i(predicted)-u_i(target))\)x y w h分别对应bbox的左上角坐标和长宽。
+体现在代码里：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>loss_rpn_bbox = net_utils.smooth_l1_loss(
+        rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights,
+        beta=1./9)
+
+</code></pre></div></div>
+<p>smooth L1 function：
+\(smooth_{L1}(x) = \begin{cases} \frac{\sigma^2x^2}{2} &amp; \lVert x \rVert &lt; \frac{1}{\sigma^2} \\ \lVert x \rVert - \frac{0.5}{\sigma^2} &amp; otherwise\end{cases}\)</p>
+
+<p>这里的\(\sigma\)是随机选的。</p>
+
+<p>因此，为了计算loss我们需要计算以下数值：</p>
+
+<ol>
+  <li>Class labels (background or foreground) and scores for the anchor boxes</li>
+  <li>Target regression coefficients for the foreground anchor boxes</li>
+</ol>
+
+<p>现在我们通过anchor target layer的实现来看看这些值计算过程：
+首先我们选择在image范围内的anchor box，然后通过计算所有anchor box和所有gt box的IOU来选取好的fg box。 使用overlap信息，有两种类型的box将被标记为fg:</p>
+
+<ol>
+  <li>type A: 对每个gt box，所有和它有最大iou overlap的fg box</li>
+  <li>type B: 和某些gt box最大overlap超过一定阈值的anchor box</li>
+</ol>
+
+<p><img src="https://s2.loli.net/2025/08/18/67o2bIX5Y9iZrz3.png" alt="nms" /></p>
+
+<p>体现在代码里：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># Fg label: for each gt use anchors with highest overlap
+# (including ties)
+labels[anchors_with_max_overlap] = 1
+# Fg label: above threshold IOU
+labels[anchor_to_gt_max &gt;= cfg.TRAIN.RPN_POSITIVE_OVERLAP] = 1
+</code></pre></div></div>
+
+<p>需要注意的是和某gt box的overlap超过一定阈值的anchor box才被认为是fg box。这是为了避免让RPN学习注定失败的任务：要学习的box的regression coefficients和最佳匹配的gt box隔得太远。同理，overlap小于某阈值的box即为bg box。需要注意的是，fg/bg并不是“非黑即白”，而是有“don’t care”这单独的一类，用来标识既不是fg也不是bg的box，这些框也就不在loss的计算范围中。同时，“don’t care”也用来约束fg和bg的总数和比例，比如多余的fg随机标为“don’t care”。</p>
+
+<p>There are two additional thresholds related to the total number of background and foreground boxes we want to achieve and the fraction of this number that should be foreground. If the number of foreground boxes that pass the test exceeds the threshold, we randomly mark the  excess foreground boxes to “don’t care”. Similar logic is applied to the background boxes.</p>
+
+<p>Next, we compute bounding box regression coefficients between the foreground boxes and the corresponding ground truth box with maximum overlap. This is easy and one just needs to follow the formula to calculate the regression coefficients.</p>
+
+<p>This concludes our discussion of the anchor target layer. To recap, let’s list the parameters and input/output for this layer:</p>
+
+<p>一些相关参数：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.RPN_POSITIVE_OVERLAP</code>: 用来筛选fg box的阈值(Default: 0.7)</li>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.RPN_NEGATIVE_OVERLAP</code>: 用来筛选bg box的阈值(Default: 0.3)。这样一来，和ground truth的overlap在0.3~0.7就是“don’t care”。</li>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.RPN_BATCHSIZE</code>: fg和bg anchor的总数 (default: 256)</li>
+  <li><code class="language-plaintext highlighter-rouge">TRAIN.RPN_FG_FRACTION</code>: batch size中fg的比例 (default: 0.5)。如果fg数量超过 TRAIN.RPN_BATCHSIZE$\times$ TRAIN.RPN_FG_FRACTION, 超过的部分 (根据索引随机选择) 就被标为 “don’t care”.</li>
+</ul>
+
+<p>输入:</p>
+
+<ul>
+  <li>RPN Network Outputs (predicted foreground/background class labels, regression coefficients)</li>
+  <li>Anchor boxes (generated by the anchor generation layer)</li>
+  <li>Ground truth boxes</li>
+</ul>
+
+<p>输出：</p>
+
+<ul>
+  <li>Good foreground/background boxes and associated class labels</li>
+  <li>Target regression coefficients</li>
+</ul>
+
+<h3 id="24-proposal-target-layer">2.4 Proposal Target Layer</h3>
+
+<p>前面提到proposal layer负责产生ROI list，而Proposal Target Layer负责从这个list中选出可信的ROI。这些ROI将经过 crop pooling从feature map中crop出相应区域，传给后面的classification layer（head_to_tail）.</p>
+
+<p>和anchor target layer相似，Proposal Target Layer的重要性在于：如果这一步不能选出好的候选（和ground truth 尽可能重合），后面的classification也是“巧妇难为无米之炊”。</p>
+
+<p>具体来说：在得到了proposal layer的roi之后，对每个ROI，计算和每个ground truth的最大重合率，这样就把ROI划分成了bg和fg：</p>
+
+<ul>
+  <li>fg ROI：和每个ground truth的重合都超过了阈值（<code class="language-plaintext highlighter-rouge">TRAIN.FG_THRESH</code>, default: 0.5）</li>
+  <li>bg ROI：最大重合率阈值在<code class="language-plaintext highlighter-rouge">TRAIN.BG_THRESH_LO</code>和 <code class="language-plaintext highlighter-rouge">TRAIN.BG_THRESH_HI</code> (default 0.1, 0.5 respectively)之间。</li>
+</ul>
+
+<p>这个过程可以理解为一种“hard negative mining”：把更难的bg 样本输送给classifier。</p>
+
+<p>在这之后，要计算每个ROI和与它最接近的ground truth box之间的regression target（这一步也包含bg ROI，因为这些ROI也有重合的ground truth box）。所有类别的regression target如下：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/ixjMqQXroWsNIdK.png" alt="img_5aa32302afc0b-1.png-83kB" /></p>
+
+<p>这个bbox_inside_weights起一个mask的作用，只有对分类正确的fg roi才是1，而所有bg都是0，这样就只计算fg的loss，不管bg的，但是算分类loss的时候还是都考虑。</p>
+
+<p>输入：</p>
+
+<ul>
+  <li>ROIs produced by the proposal layer</li>
+  <li>ground truth information</li>
+</ul>
+
+<p>输出：</p>
+
+<ul>
+  <li>Selected foreground and background ROIs that meet overlap criteria.</li>
+  <li>Class specific target regression coefficients for the ROIs</li>
+</ul>
+
+<p>参数：</p>
+
+<ul>
+  <li>TRAIN.FG_THRESH: (default: 0.5) Used to select foreground ROIs. ROIs whose max overlap with a ground truth box exceeds FG_THRESH are marked foreground</li>
+  <li>TRAIN.BG_THRESH_HI: (default 0.5)</li>
+  <li>TRAIN.BG_THRESH_LO: (default 0.1) These two thresholds are used to select background ROIs. ROIs whose max overlap falls between BG_THRESH_HI and BG_THRESH_LO are marked background</li>
+  <li>TRAIN.BATCH_SIZE: (default 128) Maximum number of foreground and background boxes selected.</li>
+  <li>TRAIN.FG_FRACTION: (default 0.25). Number of foreground boxes can’t exceed BATCH_SIZE*FG_FRACTION</li>
+</ul>
+
+<h2 id="3crop-pooling-layer">3.Crop Pooling layer</h2>
+
+<p>有了Proposal Target Layer计算的ROI的包含class label、regression coefficients的regression target，下一步就是从从feature map中提取ROI对应区域。所抽取的区域将参与tail部分的网络，并最终输出每个ROI对应的class probability distribution 和 regression coefficients，这也就是Crop Pooling layer的任务。其关键思想可以参考<a href="http://www.telesens.co/2018/03/11/object-detection-and-classification-using-r-cnns/#ITEM-1455-7">Spatial Transformation Networks</a>，其目标是提供一个warping function（ a \(2\times 3\) affine transformation matrix）：将输入的feature map映射到warped feature map，如下图：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/dNIECvFr4agL2jn.png" alt="crop pooling" /></p>
+
+<p>包括两步：</p>
+
+<ul>
+  <li>\(\begin{bmatrix} x_i^s \\ y_i^s \end{bmatrix} = \begin{bmatrix} \theta_{11} &amp; \theta_{12} &amp; \theta_{13} \\ \theta_{21} &amp; \theta_{22} &amp; \theta_{23} \end{bmatrix}\begin{bmatrix} x_i^t \\ y_i^t \\ 1\end{bmatrix}\). 这里\(x_i^s, y_i^s, x_i^t, y_i^t\) 是 height/width normalized coordinates (similar to the texture coordinates used in graphics), 所以\(-1 \leq x_i^s, y_i^s, x_i^t, y_i^t \leq 1\).</li>
+  <li>第二步, 输入的source map经过source坐标的采样输出destination map。在这一步中，每个 \((x_i^s, y_i^s)\)坐标都定义了输入中sampling kernel(for example bi-linear sampling kernel) 所应用的空间位置，从而得到输出的feature map中每个pixel的值</li>
+</ul>
+
+<p><img src="https://s2.loli.net/2025/08/18/K8FeYjrBxs7dcfo.png" alt="img_5aa4255fdacb6.png-118.4kB" /></p>
+
+<p>不同的pooling模式：</p>
+
+<ul>
+  <li>crop</li>
+  <li>align</li>
+</ul>
+
+<p>主要用到Pytorch的<strong>torch.nn.functional.affine_grid</strong> 和torch.nn.functional.grid_sample</p>
+
+<p>crop pooling的步骤：</p>
+
+<ol>
+  <li>ROI坐标 $\div$ head网络下采样的倍数（也就是stride）。需要特别指出的是：proposal target layer给出的ROI坐标是原图尺度上的（默认800$\times$600），因此映射到feature map之前要先除stride（默认是16，前面解释过）。</li>
+  <li>affine transformation matrix（仿射变换矩阵）</li>
+  <li>最关键的一点在于后面的分类网接收的是固定大小输入，因此这一步需要把矩形窗</li>
+</ol>
+
+<h2 id="4classification-layer">4.Classification Layer</h2>
+<p>crop pooling layer基于proposal target layer生成的ROI boxes和“head” network的convolutional feature maps，生成square feature maps。 feature maps接下来通过ResNet的layer4、沿着spatial维的average pooling，结果(called “fc7” in code) 是每个ROI的一维特征向量。过程如下：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/GseXmZwVPNkxI1j.png" alt="classification layer" /></p>
+
+<p>fc之后得到的一维特征向量被送到两个全连接网络中：<code class="language-plaintext highlighter-rouge">bbox_pred_net</code> and <code class="language-plaintext highlighter-rouge">cls_score_net</code></p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">cls_score_net</code>：生成roi每个类别的score（softmax之后就是概率了）</li>
+  <li><code class="language-plaintext highlighter-rouge">bbox_pred_net</code>：结合两者得到最终的bbox坐标
+    <ul>
+      <li>class specific bounding box regression coefficients</li>
+      <li>原来proposal target layer生成的 bbox 坐标</li>
+    </ul>
+  </li>
+</ul>
+
+<p>过程如下：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/VrAjTl3OJaW9bFI.png" alt="img_5aa55c97f3287.png-62.8kB" /></p>
+
+<p>有意思的是，训练classification layer得到的loss也会反向传播给RPN。这是因为用来做crop pooling的ROI box坐标不仅是RPN产生的 regression coefficients应用到anchor box上的结果，其本身也是网络输出。因此，在反传的时候，误差会通过roi pooling layer传播到RPN layer。好在crop pooling在Pytorch中有内部实现，省去了计算梯度的麻烦。</p>
+
+<h4 id="计算-classification-layer-loss">计算 Classification Layer Loss</h4>
+
+<p>这个阶段要把不同物体的标签考虑进来了，所以是一个多分类问题。使用交叉熵计算分类Loss：</p>
+
+<p>这个阶段依然要计算bounding box regression loss，和前面的R区别PN的区别在于：</p>
+
+<ul>
+  <li>RPN的是为了让bbox更紧凑地贴合物体。 anchor target layer算得的target regression coefficients需要将roi box和离它最近的ground truth bbox对齐。</li>
+  <li>classification layer中的是针对各个类别的。也就是说，对每个roi、每个类别都会生成一套coefficient。只有那些分类正确了的box才能参与，分类错误的直接不考虑了。</li>
+</ul>
+
+<blockquote>
+  <p>代码实现上：使用了mask array将for循环操作转化成了矩阵乘法。mask array标注了每个anchor的正确物体类别。</p>
+</blockquote>
+
+<p>考虑到计算Classification Layer Loss和计算RPN Loss十分相似，在此先讲。</p>
+
+\[\text{Classification Layer Loss} = \text{Classification Loss} + \text{Bounding Box Regression Loss}\]
+
+<p>classification layer和RPN的关键区别是：RPN处理的是bg/fg的问题，classification layer处理的是所有的物体分类（加上bg）</p>
+
+<ul>
+  <li><strong>classification loss</strong>：cross entropy loss with the true object class and predicted class score as the parameters. 计算过程如下:</li>
+</ul>
+
+<p><img src="https://s2.loli.net/2025/08/18/98AzeJws6qTrgXm.png" alt="img_5aa1cd250f265-1.png-22.8kB" /></p>
+
+<p><img src="https://s2.loli.net/2025/08/18/rdNRfkH6txWB81F.png" alt="img_5aa1bf41503d4-1 .png-16.7kB" /></p>
+
+<ul>
+  <li><strong>bounding box regression loss</strong>:和RPN的时候类似，除了现在 regression coefficients是针对class的. 也就是说，会针对每个object类型计算 regression coefficients. 显然，对某anchor box来说，最大重合的gt box所属的类别算得的 target regression coefficients 才是可用的。在计算loss时，会以mask array的形式标记出每个anchor box的正确class。分类错误的其余class 的 regression coefficients 就被忽略了. This mask array allows the computation of loss to be a matrix multiplication as opposed to requiring a for-each loop.</li>
+</ul>
+
+<p>因此计算Classification Layer Loss需要以下3个数值:</p>
+
+<ul>
+  <li>预测的class label和bbox regression coefficients (these are outputs of the classification network)</li>
+  <li>每个 anchor box的class labels</li>
+  <li>Target bounding box regression coefficients</li>
+</ul>
+
+<h1 id="mask-rcnn">Mask-RCNN</h1>
+<p><a href="https://github.com/multimodallearning/pytorch-mask-rcnn">Mask RCNN的Pytorch实现</a>，<a href="https://arxiv.org/pdf/1703.06870.pdf">原始论文</a>。</p>
+
+<p>mask rcnn里默认的mask head是conv层，也可以通过MRCNN.<code class="language-plaintext highlighter-rouge">USE_FC_OUTPUT</code>设置使用FC层。</p>
+
+<ul>
+  <li>做分割的话，关键是roi pooling时候的对齐问题，mask rcnn提出roi align
+face++提出precise roi pooling，使用$x/16$而不是$[x/16]$，使用bilinear interpolation</li>
+  <li>分隔开分割和分类两个任务，mask rcnn中对每个类别都会生成一个mask，或者是class-agnostic的实验中，不管类别直接生成mask，效果都不错</li>
+  <li>[关于mask rcnn实现的讨论][241]，kaggle上也有一个做医疗图像的demo</li>
+</ul>
+
+<h1 id="inference">Inference</h1>
+
+<p><img src="https://s2.loli.net/2025/08/18/YMTnkId2H8PFXOh.png" alt="inference" /></p>
+
+<p><img src="https://s2.loli.net/2025/08/18/l48hItQ6VEzjveW.png" alt="predict" />
+The red boxes show the top 6 anchors ranked by score. Green boxes show the anchor boxes after applying the regression parameters computed by the RPN network. The green boxes appear to fit the underlying object more tightly. Note that after applying the regression parameters, a rectangle remains a rectangle, i.e., there is no shear. Also note the significant overlap between rectangles. This redundancy is addressed by applying non-maxima suppression</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/X9Hhwbm6uikrTdF.png" alt="img_5aa5809cc7206.png-625.4kB" />
+Red boxes show the top 5 bounding boxes before NMS, green boxes show the top 5 boxes after NMS. By suppressing overlapping boxes, other boxes (lower in the scores list) get a chance to move up</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/k5thgJuDnANHIBV.png" alt="img_5aa581709aa82.png-652.1kB" />
+From the final classification scores array (dim: n, 21), we select the column corresponding to a certain foreground object, say car. Then, we select the row corresponding to the max score in this array. This row corresponds to the proposal that is most likely to be a car. Let the index of this row be car_score_max_idx Now, let the array of final bounding box coordinates (after applying the regression coefficients) be bboxes (dim: n,21*4). From this array, we select the row corresponding to car_score_max_idx. We expect that the bounding box corresponding to the car column should fit the car in the test image better than the other bounding boxes (which correspond to the wrong object classes). This is indeed the case. The red box corresponds to the original proposal box, the blue box is the calculated bounding box for the car class and the white boxes correspond to the other (incorrect) foreground classes. It can be seen that the blue box fits the actual car better than the other boxes.</p>
+
+<p>For showing the final classification results, we apply another round of NMS and apply an object detection threshold to the class scores. We then draw all transformed bounding boxes corresponding to the ROIs that meet the detection threshold. The result is shown below.</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/cxXOpJLnDdB5jhI.png" alt="img_5aa5827c1d42c.png-896.9kB" /></p>
+
+<h1 id="appendix">Appendix</h1>
+
+<h2 id="非极大值抑制non-maximum-suppressionnms">非极大值抑制（non-maximum suppression，nms）</h2>
+
+<p><img src="https://s2.loli.net/2025/08/18/CjlZF5kPAbJG6ut.jpg" alt="UNADJUSTEDNONRAW_thumb_5e2.jpg-87.6kB" /></p>
+
+<p><img src="https://s2.loli.net/2025/08/18/ASulxDZY5XoCNnG.png" alt="img_5aa7c828703ab.png-978.8kB" /></p>
+
+<p>上图左边的黑色数字代表fg的概率</p>
+
+<ul>
+  <li>standard NMS (boxes are ranked by y coordinate of bottom right corner). This results in the box with a lower score being retained. The second figure uses modified NMS (boxes are ranked by foreground scores).</li>
+</ul>
+
+<p><img src="https://s2.loli.net/2025/08/18/cGzd9mYMp1lP8qU.png" alt="img_5aa7c84451f81.png-975kB" /></p>
+
+<ul>
+  <li>This results in the box with the highest foreground score being retained, which is more desirable. In both cases, the overlap between the boxes is assumed to be higher than the NMS overlap threhold.</li>
+</ul>
+
+<p><a href="https://zhuanlan.zhihu.com/p/31427728">讲nms（non-maximum suppression）的文章</a></p>
+
+<h2 id="针对小物体">针对小物体</h2>
+
+<p>每个小红点之间就是16像素的间隔了，如果要检测特别细小的物体，这么大的下采样就很危险了。于是，为了尽量不破坏细小物体的清晰度，参考<a href="https://github.com/rbgirshick/py-faster-rcnn/issues/86">github上关于检测微小物体的讨论</a>，我尝试了两种方案：</p>
+
+<h3 id="1-降低下采样倍数">1. 降低下采样倍数</h3>
+
+<p>为了方便实验，我给网络增加了一个参数<code class="language-plaintext highlighter-rouge">downsample</code>，用来控制下采样倍数，相应地调整网络结构：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>parser.add_argument('--downsample', dest='downsample_rate',
+                  help='downsample',
+                  default=16, type=int) # 原网络默认16倍
+</code></pre></div></div>
+
+<p>需要注意的是：</p>
+
+<ul>
+  <li>一旦改变下采样，同时还要改变feature_stride和spatial_scale。否则预测框框就变成了边缘的线条（同时loss_rpn_cls奇高）。比如VGG16（降采样8倍）：
+    <ul>
+      <li>__C.feat_stride’: 8”</li>
+      <li>self.spatial_scale to (1/8)</li>
+    </ul>
+  </li>
+  <li>vgg16尝试4倍下采样：去掉了stage5的卷积，保障输入图像最短边在1200</li>
+</ul>
+
+<h3 id="2-切割原图">2. 切割原图</h3>
+
+<ul>
+  <li>训练数据切patch：将原图切分为四等份再训练，保障大部分图的清晰度不被压缩。这样一来，标注也要做调整：
+    <ul>
+      <li>一种方式是重新生成新的子图标注，新写一个yourdata.py；</li>
+      <li>另一种偷懒方式则是修改 yourdata.py的<code class="language-plaintext highlighter-rouge">_load_XXX_anotation(self, index)</code>，使得读入每个子图，返回的也是每个子图的所有标注框。</li>
+    </ul>
+  </li>
+  <li>测试数据为原图，沿用原来的数据读入方式即可。</li>
+</ul>
+
+<h3 id="训练minibatch-sgd">训练：Minibatch SGD</h3>
+
+<blockquote>
+  <p>Linear Scaling Rule: When the minibatch size ismultiplied by k, multiply the learning rate by k.</p>
+</blockquote>
+
+<p>warmup：</p>
+
+<h2 id="reference">Reference</h2>
+
+<ul>
+  <li><a href="https://arxiv.org/pdf/1506.01497.pdf">faster rcnn原始论文</a></li>
+  <li>如果想了解object detection的发展史，可以看<a href="https://tryolabs.com/blog/2017/08/30/object-detection-an-overview-in-the-age-of-deep-learning/">Object Detection</a></li>
+  <li>推荐阅读<a href="https://tryolabs.com/blog/2018/01/18/faster-r-cnn-down-the-rabbit-hole-of-modern-object-detection/">Faster R-CNN: Down the rabbit hole of modern object detection</a></li>
+  <li>
+    <p><a href="http://www.telesens.co/2018/03/11/object-detection-and-classification-using-r-cnns/">Object Detection and Classification using R-CNNs</a></p>
+
+  </li>
+</ul>]]></content><author><name></name></author><category term="2D Vision" /><category term="object detection" /><summary type="html"><![CDATA[Pytorch version of Detectron]]></summary></entry><entry><title type="html">基于Rasa_NLU的微信chatbot</title><link href="https://rowl1ng.com/posts/2017/chatbot/" rel="alternate" type="text/html" title="基于Rasa_NLU的微信chatbot" /><published>2017-11-05T00:00:00+00:00</published><updated>2017-11-05T00:00:00+00:00</updated><id>https://rowl1ng.com/posts/2017/chatbot</id><content type="html" xml:base="https://rowl1ng.com/posts/2017/chatbot/"><![CDATA[<h1 id="重要资料">重要资料</h1>
+
+<p>chatbot三步走：nlu model-&gt;dialogue policy-&gt;agent</p>
+
+<ul>
+  <li>本项目的github地址：<a href="https://github.com/Rowl1ng/rasa_wechat">Rasa_wechat</a></li>
+  <li>视频讲解（正文+编程+QA）：<a href="https://www.bilibili.com/video/av16505671/">bilibili</a></li>
+  <li><a href="https://rasa.com/docs/nlu/">Rasa_NLU官方文档</a></li>
+  <li><a href="https://core.rasa.ai/index.html">Rasa_Core官方文档</a></li>
+  <li><a href="http://wxpy.readthedocs.io/zh/latest/index.html">wxpy文档</a></li>
+  <li>关于机器学习的数学基础和理论介绍，我整理在<a href="http://rowl1ng.com/mybook/README%203.html">机器学习Gitbook</a></li>
+</ul>
+
+<h1 id="研究背景">研究背景</h1>
+
+<ul>
+  <li>老式chatbot基于大量规则库，不好维护。ps: 一个比较有意思例子是<a href="https://baike.baidu.com/item/%E4%BC%AA%E6%98%A5%E8%8F%9C">伪春菜</a>。</li>
+  <li>主流架构为”<strong>NLU自然语言理解+DM对话管理+NLG自然语言生成</strong>”，也就是上图展示的除ASR和TTS的部分。
+    <ul>
+      <li><strong>NLU</strong>负责基础自然语言处理，主要目标是<strong>意图识别</strong>与<strong>实体识别</strong>；</li>
+      <li><strong>DM</strong>负责<strong>对话状态维护</strong>、<strong>数据库查询</strong>等；</li>
+      <li><strong>NLG</strong>负责生成<strong>交互的自然语言</strong>。</li>
+    </ul>
+  </li>
+  <li>机器学习尤其是深度学习在不断改进NLU、DM和NLG，乃至颠覆整个架构：
+    <ul>
+      <li>每一个模块都换成DL模型，甚至再加入User Simulator做强化学习，进行端到端的训练；</li>
+      <li>Memory Networks：将整个知识库都encode在一个复杂的深度网络中，然后再和encode过的问题结合起来decode生成答案，可参考<a href="https://www.bilibili.com/video/av12005540/?from=search&amp;seid=16935660224461089205">Siraj Raval的视频</a>。这个工作最多还是应用在机器阅读理解上，在垂直领域任务导向的chatbot上的成功应用还有待观察。</li>
+    </ul>
+  </li>
+</ul>
+
+<h1 id="步入正题">步入正题</h1>
+
+<p>现在的chatbot一种是纯聊天（比如小黄鸡），一种是针对特定商业应用（比如智能客服），这里介绍的其实更偏向后一种。</p>
+
+<p>我们这里要用的<a href="https://github.com/RasaHQ/rasa_nlu">Rasa_NLU</a>以及后面介绍的<a href="https://github.com/RasaHQ/rasa_core">Rasa_Core</a>是<a href="http://rasa.ai/">rasa.ai</a>提供的开源工具，支持Python 2和3，可以本地部署，自己针对实际需求训练和调整模型，在商业chatbot设计上有颇多考量。此外，我们加上了微信的python接口<code class="language-plaintext highlighter-rouge">wxpy</code>来实现微信端的交互，其流程图如下：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/aAJKdVjhecxwNBy.png" alt="流程图" />
+（图片来自Rasa_Core官网）</p>
+
+<p>最上面的<code class="language-plaintext highlighter-rouge">Rasa_NLU</code>就是最开始讲到的负责<strong>自然语言理解</strong>的部分，而最下面的<code class="language-plaintext highlighter-rouge">Rasa_Core</code>则是在得到了<code class="language-plaintext highlighter-rouge">intent</code>和<code class="language-plaintext highlighter-rouge">entities</code>之后负责生成<code class="language-plaintext highlighter-rouge">next_action</code>以及自然语言的回复。最左边的一问一答则由<code class="language-plaintext highlighter-rouge">wxpy</code>来完成监听消息和发送消息的任务。</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/Qtx2m5M7qHh61Sf.png" alt="rasa_arch_colour.png-29.6kB" /></p>
+
+<p>用伪代码表示的话：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#输入
+</span><span class="n">input_string</span><span class="o">=</span><span class="sh">""</span>
+<span class="c1">#意图识别
+</span><span class="n">intent_object</span><span class="o">=</span><span class="nf">intent</span><span class="p">(</span><span class="n">input_string</span><span class="p">)</span>
+<span class="c1">#回复生成
+</span><span class="n">response</span><span class="o">=</span><span class="nf">policy</span><span class="p">(</span><span class="n">intent_object</span><span class="p">)</span>
+<span class="c1">#返回用户
+</span><span class="nf">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>把大象塞进冰箱的第一步是？</p>
+
+<p>打开冰箱门。先不要着急，首先你得明确想做一个什么样的机器人。比如我想做一个”<code class="language-plaintext highlighter-rouge">你妈喊你回家吃饭</code>“，就是当我说”我饿了”，机器人能像我妈一样问我想吃啥，或者叮嘱我早睡早起少吃麻辣烫。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mkdir mom &amp;&amp; cd mom
+</code></pre></div></div>
+
+<p>现在我们需要两种材料，分别对应NLU和对话管理模块：</p>
+
+<ul>
+  <li>训练数据：nlu examples + dialogue stories</li>
+  <li>配置文件：nlu config + dialogue domain</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mom/
+├── data/
+│   ├── stories.md            # dialogue training data
+│   └── nlu.md                # nlu training data
+├── domain.yml                # dialogue configuration
+└── nlu_model_config.json     # nlu configuration
+</code></pre></div></div>
+
+<p>下面先来介绍NLU的部分。</p>
+
+<h2 id="自然语言理解rasa-nlu">自然语言理解：Rasa NLU</h2>
+
+<p>针对用户的问题，NLU模块的任务是：</p>
+
+<ol>
+  <li>意图识别 (Intent)：在<strong>句子级别</strong>进行分类，明确意图；</li>
+  <li>实体识别 (Entity)：在<strong>词级别</strong>找出用户问题中的<strong>关键实体</strong>，进行实体槽填充(Slot Filling)。</li>
+</ol>
+
+<p>举个例子，当我说“我想吃羊肉泡馍”，NLU模块就可以识别出用户的意图是“寻找餐馆”，而关键实体是“羊肉泡馍”。有了意图和关键实体，就方便了后面对话管理模块进行后端数据库的查询或是有缺失信息而来继续多轮对话补全其它缺失的实体槽。</p>
+
+<p>已有的NLU工具，大多是以服务的方式，通过调用远程http的restful API来对目标语句进行解析完成上述两个任务，例如Google的API.ai, Microsoft的Luis.ai, Facebook的Wit.ai等。</p>
+
+<p>事实上，申请到这类API的话<a href="http://wxpy.readthedocs.io/zh/latest/utils.html?highlight=%E5%9B%BE%E7%81%B5%E6%9C%BA%E5%99%A8%E4%BA%BA">用几行代码即可完成一个chatbot</a>，亦可参考<a href="http://www.jianshu.com/p/c6067ec268e3">使用图灵机器人和api.ai相关接口</a>。如果想从零开始动手实现NLU，推荐阅读<a href="https://medium.com/rasa-blog/do-it-yourself-nlp-for-bot-developers-2e2da2817f3d">Do-it-yourself NLP for bot developers</a>。</p>
+
+<p>遗憾的是，<a href="https://github.com/RasaHQ/rasa_nlu">Rasa_NLU</a>官方现在支持<strong>任何语言</strong>啦！这里暂时参考<a href="https://github.com/crownpku/rasa_nlu_chi">基于中文的Rasa NLU</a>来训练自己的中文NLU模型，不过仍然建议认真阅读<a href="https://rasa-nlu.readthedocs.io/en/latest/">Rasa_NLU官方文档</a>。</p>
+
+<p>中文Rasa NLU的安装：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ git clone https://github.com/crownpku/rasa_nlu_chi.git
+$ cd rasa_nlu_chi
+$ python setup.py install
+</code></pre></div></div>
+
+<h3 id="语料获取和预处理">语料获取和预处理</h3>
+
+<p>为了增大覆盖面，我们往往需要收集大量的词汇，比如维基百科和百度百科，同时结合自己的应用场景选择特定领域的语料（比如我为了测试加上了百度文库里的中国移动常见问题）。下载并处理中文维基语料的过程参考<a href="http://www.crownpku.com/2017/07/27/%E7%94%A8Rasa_NLU%E6%9E%84%E5%BB%BA%E8%87%AA%E5%B7%B1%E7%9A%84%E4%B8%AD%E6%96%87NLU%E7%B3%BB%E7%BB%9F.html">用Rasa NLU构建自己的中文NLU系统</a>这篇博文。</p>
+
+<p>在获得并处理好语料以后，中文特色是先进行分词：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># 安装jieba分词
+$ pip install jieba
+# 将一个语料文件分词，以空格为分隔符
+$ python -m jieba -d " " ./test &gt; ./test_cut
+</code></pre></div></div>
+<p>把所有分好词的语料文件放在同一个文件路径下，接下来训练MITIE模型。</p>
+
+<h3 id="训练词表示模型mitie的wordprep">训练词表示模型：MITIE的wordprep</h3>
+
+<blockquote>
+  <p>经小伙伴提醒：这个MITIE库据说以后不对外支持了，可以采用了spacy库来替代它进行意图识别和实体提取~</p>
+</blockquote>
+
+<p><a href="https://github.com/mit-nlp/MITIE">MITIE</a>（MIT Information Extraction）是MIT的 NLP 团队发布的一个信息抽取库和工具。目前包含：</p>
+
+<ul>
+  <li>命名实体抽取（Named-Entity-Recognize，NER）</li>
+  <li>二元关系检测功能（Bianry relation detection）</li>
+</ul>
+
+<p>另外也提供了训练自定义抽取器和关系检测器的工具。它的主要工作在于：</p>
+
+<ul>
+  <li>distributional word embeddings：简单说来就是将每个词映射到向量空间，向量之间的距离代表词之间的相似度，且在语义、语法两种意义上。关于词向量最新的研究可以看<a href="https://einstein.ai/research/learned-in-translation-contextualized-word-vectors?dt_dapp=1">Learned in translation: contextualized word vectors</a>；</li>
+  <li>Structural Support Vector Machines</li>
+</ul>
+
+<p>尽管 MITIE 是 C++ 写的，但它也提供了其他语言的调用 API 。先编译成动态库再用 Python 调用即可：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>conda install libgcc
+sudo apt-get install g++
+pip install git+https://github.com/mit-nlp/MITIE.git
+</code></pre></div></div>
+<p>或者</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>MITIE\mitielib&gt;mkdir build
+MITIE\mitielib&gt;cd build
+MITIE\mitielib\build&gt;cmake ..
+MITIE\mitielib\build&gt;cmake --build . --config Release --target install
+</code></pre></div></div>
+
+<p>当使用python调用时，如果报错说找不到mitie这个python包，可以手动把mitie的路径加到系统路径中：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>import os
+parent = os.path.dirname(os.path.realpath(__file__))
+sys.path.append('../../MITIE/mitielib')
+</code></pre></div></div>
+
+<p>我们使用<strong>wordprep</strong>工具来<strong>训练所有词向量特征</strong>，后面的<strong>命名实体模型</strong>和<strong>关系模型</strong>都是建立在它的基础上，使用 <code class="language-plaintext highlighter-rouge">cmake</code> 构建一下就可直接使用：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>\MITIE\tools\wordrep&gt;mkdir build
+\MITIE\tools\wordrep&gt;cd build
+\MITIE\tools\wordrep\build&gt;cmake ..
+\MITIE\tools\wordrep\build&gt;cmake --build . --config Release
+</code></pre></div></div>
+
+<p>之后训练模型得到<code class="language-plaintext highlighter-rouge">total_word_feature_extractor.dat</code>：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ ./wordrep -e /path/to/your/folder_of_cutted_text_files
+</code></pre></div></div>
+
+<p>这个过程很漫长，也很占内存，建议在服务器上用<code class="language-plaintext highlighter-rouge">nohup</code>跑。项目文件中包含我基于中文维基和中国移动常见问题训练好的<code class="language-plaintext highlighter-rouge">total_word_feature_extractor.dat</code>。</p>
+
+<h3 id="训练nlu模型rasa_nlutrain">训练NLU模型：rasa_nlu.train</h3>
+
+<p>首先需要构建示例，作为意图识别和实体识别的训练数据：<code class="language-plaintext highlighter-rouge">mom/data/nlu.json</code>。举个例子：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{
+    "text": "这附近哪里有吃麻辣烫的地方",
+    "intent": "restaurant_search",
+    "entities": [
+      {
+        "start": 7,
+        "end": 10,
+        "value": "麻辣烫",
+        "entity": "food"
+      }
+    ]
+}
+</code></pre></div></div>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">text</code>（required）：待处理的句子示例。</li>
+  <li><code class="language-plaintext highlighter-rouge">intent</code>（optional）：这个句子应该关联的意图。</li>
+  <li><code class="language-plaintext highlighter-rouge">entities</code>（optional） ：<code class="language-plaintext highlighter-rouge">start</code>和<code class="language-plaintext highlighter-rouge">end</code>共同定义实体范围，在上面的例子中， <code class="language-plaintext highlighter-rouge">"text": "这附近哪里有吃麻辣烫的地方"</code>, 那么 <code class="language-plaintext highlighter-rouge">text[7:10] == '麻辣烫'</code>。实体还可以扩展到<strong>多个词</strong>, 而且<code class="language-plaintext highlighter-rouge">value</code>不一定要是你句子中的词，这样一来，就能<strong>将同义词、误拼映射到同一个值上</strong>，比如下面这个例子：</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[
+  {
+    "text": "in the center of NYC",
+    "intent": "search",
+    "entities": [
+      {
+        "start": 17,
+        "end": 20,
+        "value": "New York City",
+        "entity": "city"
+      }
+    ]
+  },
+  {
+    "text": "in the centre of New York City",
+    "intent": "search",
+    "entities": [
+      {
+        "start": 17,
+        "end": 30,
+        "value": "New York City",
+        "entity": "city"
+      }
+    ]
+  }
+]
+</code></pre></div></div>
+
+<p>如果嫌手动输入太麻烦，可以使用 <a href="https://github.com/RasaHQ/rasa-nlu-trainer">rasa-nlu-trainer</a>进行可视化编辑：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ npm i -g rasa-nlu-trainer
+$ rasa-nlu-trainer -s 示例文件路径
+</code></pre></div></div>
+
+<p>此外，rasa也支持markdown格式的训练语料，比如：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>## intent:greeting
+- hey
+- hello
+- moin
+
+## intent:goodbye
+- bye
+- goodbye
+- see you later
+
+## intent:mood_affirm
+- yes
+- indeed
+- correct
+
+## intent:mood_deny
+- no
+- never
+- no way
+
+## intent:mood_great
+- wonderful
+- I am amazing
+- I am going to save the world
+
+## intent:mood_unhappy
+- my day was horrible
+- I am sad
+</code></pre></div></div>
+
+<p>有了示例数据，我们还需要<code class="language-plaintext highlighter-rouge">mom/nlu_model_config.json</code>来配置流水线（pipeline）。这里考虑中文支持，配置的Rasa NLU的工作流水线如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># MITIE+Jieba+sklearn:
+[“nlp_mitie”, “tokenizer_jieba”, “ner_mitie”, “ner_synonyms”, “intent_featurizer_mitie”, “intent_classifier_sklearn”]
+</code></pre></div></div>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">nlp_mitie</code>：初始化<a href="https://github.com/mit-nlp/MITIE">MITIE</a>，所有mitie组件都依赖于它；</li>
+  <li><code class="language-plaintext highlighter-rouge">tokenizer_jieba</code>：用jieba来做分词；</li>
+  <li><code class="language-plaintext highlighter-rouge">ner_mitie</code>：<a href="https://github.com/mit-nlp/MITIE">MITIE</a>的命名实体识别；</li>
+  <li><code class="language-plaintext highlighter-rouge">ner_synonyms</code>：如果在示例中通过<code class="language-plaintext highlighter-rouge">value</code>属性定义了同义词，就将这些value映射到相同value上</li>
+  <li><code class="language-plaintext highlighter-rouge">intent_featurizer_mitie</code>：提取意图的特征，作为意图分类器<code class="language-plaintext highlighter-rouge">intent_classifier_sklearn</code>的输入；</li>
+  <li><code class="language-plaintext highlighter-rouge">intent_classifier_sklearn</code>：使用sklearn做意图分类。</li>
+</ul>
+
+<p>更多pipeline内容详见<a href="https://rasa-nlu.readthedocs.io/en/latest/pipeline.html">官方文档pipeline介绍</a>。
+根据config训练NLU模型：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ python -m rasa_nlu.train -c mom/nlu_model_config.json
+</code></pre></div></div>
+
+<p>更方便的做法是python调用：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># train_nlu.py ：train NLU model
+
+from rasa_nlu.converters import load_data
+from rasa_nlu.config import RasaNLUConfig
+from rasa_nlu.model import Trainer
+
+# 训练模型
+def train():
+    # 示例数据
+    training_data = load_data('data/examples/rasa/demo-rasa_zh.json')
+    # pipeline配置
+    trainer = Trainer(RasaNLUConfig("sample_configs/config_jieba_mitie_sklearn.json"))
+    trainer.train(training_data)
+    model_directory = trainer.persist('./projects/default/')  # 返回nlu模型的储存位置；如果config文件中没有project_name，模型会存储在默认的 /models/default 文件夹下
+
+# 识别意图
+def predict(model_directory):
+    from rasa_nlu.model import Metadata, Interpreter
+    # 用nlu模型初始化interpreter； `model_directory`为nlu模型位置
+    interpreter = Interpreter.load(model_directory, RasaNLUConfig("sample_configs/config_jieba_mitie_sklearn.json"))
+    # 使用加载的interpreter处理文本
+    print (interpreter.parse(u"我想吃麻辣烫"))
+</code></pre></div></div>
+<p><code class="language-plaintext highlighter-rouge">train</code>完成后就会得到一个类似<code class="language-plaintext highlighter-rouge">model_20171013-153447</code>的文件存在 <code class="language-plaintext highlighter-rouge">/models/your_project_name</code> 文件夹里。项目文件中提供训练好的NLU模型：<code class="language-plaintext highlighter-rouge">/rasa_nlu_chi/models/rasa_nlu_test/model_20171013-153447</code>。使用的话注意改一下model目录下<code class="language-plaintext highlighter-rouge">metadata.json</code>的<code class="language-plaintext highlighter-rouge">mitie_file</code>路径。</p>
+
+<p>测试效果除了使用python来<code class="language-plaintext highlighter-rouge">predict(model_directory)</code>，还可以启动rasa_nlu的HTTP服务：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ curl -XPOST localhost:5000/parse -d '{"q":"我发烧了该吃什么药？", "project": "rasa_nlu_test", "model": "model_20170921-170911"}' | python -mjson.tool
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   652    0   552  100   100    157     28  0:00:03  0:00:03 --:--:--   157
+{
+    "entities": [
+        {
+            "end": 3,
+            "entity": "disease",
+            "extractor": "ner_mitie",
+            "start": 1,
+            "value": "发烧"
+        }
+    ],
+    "intent": {
+        "confidence": 0.5397186422631861,
+        "name": "medical"
+    },
+    "intent_ranking": [
+        {
+            "confidence": 0.5397186422631861,
+            "name": "medical"
+        },
+        {
+            "confidence": 0.16206323981749196,
+            "name": "restaurant_search"
+        },
+        {
+            "confidence": 0.1212448457737397,
+            "name": "affirm"
+        },
+        {
+            "confidence": 0.10333600028547868,
+            "name": "goodbye"
+        },
+        {
+            "confidence": 0.07363727186010374,
+            "name": "greet"
+        }
+    ],
+    "text": "我发烧了该吃什么药？"
+}
+</code></pre></div></div>
+
+<p>以上返回的内容结合了流水线中各个组件的结果，我们可以根据自己的需求设计流水线以及利用返回结果。</p>
+
+<p>现在回到我们的chatbot目录，来讲剩下的dialogue部分的<code class="language-plaintext highlighter-rouge">domain.yml</code>和<code class="language-plaintext highlighter-rouge">stories.md</code> ：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mom/
+├── data/
+│   ├── stories.md            # dialogue training data
+│   └── nlu.md                # nlu training data
+├── domain.yml                # dialogue configuration
+└── nlu_model_config.json     # nlu configuration
+</code></pre></div></div>
+
+<h2 id="对话管理rasa-core">对话管理：Rasa Core</h2>
+
+<p><a href="https://github.com/RasaHQ/rasa_core">Rasa Core</a>是一个用来搭建对话系统的框架，具体可查看<a href="https://core.rasa.ai/index.html">Rasa Core官方文档</a>（似乎要科学上网才能访问）。它的具体工作流程如下：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/Qtx2m5M7qHh61Sf.png" alt="rasa_arch_colour.png-29.6kB" /></p>
+
+<ol>
+  <li>外面来的信息首先经由interpreter转成text、intent、entities</li>
+  <li>tracker负责记录对话状态，接收interpreter的结果</li>
+  <li>policy收到当前状态信息</li>
+  <li>policy选择下一步action</li>
+  <li>所选择的action被tracker记录</li>
+  <li>输出回复</li>
+</ol>
+
+<h3 id="安装">安装</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/RasaHQ/rasa_core.git
+cd rasa_core
+pip install -r requirements.txt
+python setup.py install
+</code></pre></div></div>
+
+<p>推荐国内用户从国内镜像（比如豆瓣 PYPI 镜像源<code class="language-plaintext highlighter-rouge">https://pypi.doubanio.com/simple/</code>）下载安装，否则<code class="language-plaintext highlighter-rouge">pip install -r requirements.txt</code>可能会各种连接失败。</p>
+
+<blockquote>
+  <p><a href="http://blog.csdn.net/u012436149/article/details/66974668">更改pip源</a>速度快了好多~</p>
+</blockquote>
+
+<p>运行helloworld示例来检验是否正常安装成功：</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">python examples/hello_world/run.py</span>
+<span class="na">Bot loaded. Type hello and press enter </span><span class="pi">:</span>
+<span class="s">hello</span>
+<span class="s">hey there!</span>
+</code></pre></div></div>
+
+<h3 id="定义意图和动作domainyml">定义意图和动作：domain.yml</h3>
+
+<p>Rasa基于<code class="language-plaintext highlighter-rouge">intents</code>、<code class="language-plaintext highlighter-rouge">entities</code>和当前对话的内部状态，从<code class="language-plaintext highlighter-rouge">actions</code>中选择下一步采取的行动。比如机器人选择<code class="language-plaintext highlighter-rouge">utter_greet</code>的话，就会从<code class="language-plaintext highlighter-rouge">templates</code>中找出相应的句子作为回复（可以填充变量）。而这些都需要我们在domain.yml中预先定义好。</p>
+
+<blockquote>
+  <p><code class="language-plaintext highlighter-rouge">ActionListen</code>是一个特殊的action，意味着等待用户，直到说别的内容。当然你还可以定义你自己的action，作为python类来调用。</p>
+</blockquote>
+
+<p>举个例子：</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#创建文件common_domain.yml，复制如下代码</span>
+<span class="s">intents:#定义意图</span>
+ <span class="s">- greet</span>
+ <span class="s">- goodbye</span>
+ <span class="s">- chat</span>
+
+<span class="na">entities</span><span class="pi">:</span>
+ <span class="pi">-</span> <span class="s">action</span>
+
+<span class="s">templates:#表示对于相应的意图采取什么样的回复</span>
+  <span class="s">utter_greet</span><span class="err">:</span>
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">hello!"</span>
+<span class="err">  </span><span class="na">utter_goodbye</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">byebye</span><span class="nv"> </span><span class="s">:("</span>
+  <span class="na">utter_chat</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">It</span><span class="nv"> </span><span class="s">seems</span><span class="nv"> </span><span class="s">like</span><span class="nv"> </span><span class="s">funny!"</span>
+
+<span class="s">actions:#定义bot可以采取的动作</span>
+  <span class="s">- utter_greet</span>
+  <span class="s">- utter_goodbye</span>
+  <span class="s">- utter_chat</span>
+</code></pre></div></div>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">intents</code>：NLU模型识别的意图；</li>
+  <li><code class="language-plaintext highlighter-rouge">entities</code>：NLU模型识别的实体；</li>
+  <li><code class="language-plaintext highlighter-rouge">actions</code>：机器人说和做的内容，比如问候对方、调用某个API、查询数据库等；</li>
+  <li><code class="language-plaintext highlighter-rouge">slots</code>：用来跟踪上下文和多轮对话的关键信息，具体参考<a href="https://core.rasa.ai/domains.html#slot-types">slot types</a>；</li>
+  <li><code class="language-plaintext highlighter-rouge">templates</code>：说话模板。</li>
+</ul>
+
+<h3 id="定义解释器interpreter">定义解释器（interpreter）：</h3>
+
+<p>interpreter用来处理消息，包括执行NLU和把消息转为格式化信息。其实就是上一个part所讲的训练NLU model的过程。这里假定我们已经有了NLU model。</p>
+
+<h3 id="训练你的对话模型">训练你的对话模型</h3>
+
+<p>我们通过<code class="language-plaintext highlighter-rouge">domain.yml</code>定义好了<code class="language-plaintext highlighter-rouge">action</code>、教会了小宝宝牙牙学语（各种模板），还要告诉ta什么时候说什么话（基于会话历史训练概率模型，来预测需要采取的<code class="language-plaintext highlighter-rouge">action</code>）。有两种”教学方法”（训练方式）：</p>
+
+<ol>
+  <li>念故事书：如果你有标记好的对话数据，可以直接做有监督学习（<strong>supervised learning</strong>）；</li>
+  <li>面对面聊天：：但大多数人没有监督学习条件，此时推荐从无到有的交互式学习（<a href="https://core.rasa.ai/tutorial_interactive_learning.html#tutorial-interactive-learning">interactive learning</a>）。在交互学习模式下，你的chatbot每做出一个决策，你都要即时给出反馈，这有点强化学习的意思，但强化学习是在对话结束后给反馈。</li>
+</ol>
+
+<p>第二种交互式学习中，当你的chatbot答错时，你需要示范给它正确答案，此时模型会立即自我更新，这样就很难“重蹈覆辙”了。当你结束交互训练时，对话数据会被记录并添加到你的训练数据中。这里主要介绍第一种，我们将故事写在<code class="language-plaintext highlighter-rouge">stories.md</code>中：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>## happy path               &lt;!-- 故事名 - just for debugging --&gt;
+* _greet
+  - utter_greet
+* _mood_great               &lt;!-- user utterance, in format _intent[entities] --&gt;
+  - utter_happy
+
+## sad path 1               &lt;!-- this is already the start of the next story --&gt;
+* _greet
+  - utter_greet             &lt;!-- action of the bot to execute --&gt;
+* _mood_unhappy
+  - utter_cheer_up
+  - utter_did_that_help
+* _mood_affirm
+  - utter_happy
+
+## sad path 2
+* _greet
+  - utter_greet
+* _mood_unhappy
+  - utter_cheer_up
+  - utter_did_that_help
+* _mood_deny
+  - utter_goodbye
+
+## say goodbye
+* _goodbye
+  - utter_goodbye
+</code></pre></div></div>
+<blockquote>
+  <p>Wizard-of-Oz（WOz）：自己（wizard）扮演chatbot，wizard能通过搜索接口访问数据库，接收用户的输入并决定下一步说什么。WOz收集到的对话数据可用于对话系统各个组件的研究，从NLU到NLG，或者不同领域端到端的对话系统，从而降低为每个领域人工设计新系统的成本。</p>
+</blockquote>
+
+<p>关于故事格式可以参考<a href="https://core.rasa.ai/stories.html#stories">官方文档的stories部分</a>。</p>
+
+<p>使用Python API<code class="language-plaintext highlighter-rouge">Agent</code>我们可以方便地训练、加载、使用模型：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># script/train_dm.py
+
+from rasa_core.agent import Agent
+from rasa_core.policies.memoization import MemoizationPolicy
+
+# 训练policy模型
+def train_mom_dm():
+    agent = Agent("../mom/domain.yml",
+                  policies=[MemoizationPolicy()])
+
+    agent.train(
+            training_data_file,
+            max_history=3,
+            epochs=100,
+            batch_size=50,
+            augmentation_factor=50,
+            validation_split=0.2
+    )
+
+    agent.persist(model_path)
+</code></pre></div></div>
+<p>看到这里想必你已经非常疲惫了吧，来看个漫画轻松一下：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/vRXz5jH1Kfb9p8Q.jpg" alt="IMG_0311.jpg-808.3kB" /></p>
+
+<p>这是《Understanding Comics》里解释漫画原理的一页，这里借它来说明训练
+policy模型的原理，先扫一眼训练模型的代码：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class MomPolicy(KerasPolicy):
+    def _build_model(self, num_features, num_actions, max_history_len):
+        """Build a keras model and return a compiled model.
+        :param max_history_len: The maximum number of historical turns used to
+                                decide on next action"""
+        from keras.layers import LSTM, Activation, Masking, Dense
+        from keras.models import Sequential
+
+        n_hidden = 32  # size of hidden layer in LSTM
+        # Build Model
+        batch_shape = (None, max_history_len, num_features)
+
+        model = Sequential()
+        model.add(Masking(-1, batch_input_shape=batch_shape))
+        model.add(LSTM(n_hidden, batch_input_shape=batch_shape))
+        model.add(Dense(input_dim=n_hidden, output_dim=num_actions))
+        model.add(Activation('softmax'))
+
+        model.compile(loss='categorical_crossentropy',
+                      optimizer='adam',
+                      metrics=['accuracy'])
+
+        logger.debug(model.summary())
+        return model
+</code></pre></div></div>
+
+<p>这里的<strong>LSTM</strong>其实就是处理漫画这样的sequence数据的关键道具，想象一下，我们的对话模型每句话说完就是一帧图像（当前对话状态），这样一帧一帧输入到LSTM中就是对每个时刻的对话状态进行学习，最终的目标是训练出policy，这样下次再看到“睁眼”，就能猜到下一秒应该是“闭眼”了。</p>
+
+<p>现在我们有了NLU模型和policy模型，只需要再加上微信接口，即<code class="language-plaintext highlighter-rouge">输入</code>和<code class="language-plaintext highlighter-rouge">返回用户</code>的过程。</p>
+
+<h2 id="微信后台">微信后台</h2>
+
+<h3 id="python操作微信号wxpy">python操作微信号：wxpy</h3>
+
+<p><a href="https://github.com/youfou/wxpy">wxpy</a>可用来实现各种微信个人号的自动化操作。具体的使用参见<a href="http://wxpy.readthedocs.io/zh/latest/index.html">wxpy文档</a>，应用实例可参考<a href="https://github.com/locoda/connector-wechat-bot">connector-wechat-bot</a>。这里其实只用了收发消息的接口，“智能”的部分交由后文的Rasa_Core完成。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>from wxpy import *
+# 初始化机器人，扫码登陆
+bot = Bot(console_qr=True, cache_path=True)
+</code></pre></div></div>
+<p>由于代码部署在服务器上，不能通过终端打开图片，参数<code class="language-plaintext highlighter-rouge">console_qr=True</code>表示在终端内显示二维码；<code class="language-plaintext highlighter-rouge">cache_path=True</code>启用缓存，来保存自己的登录状态。</p>
+
+<p>自己加自己好友方便以后做测试：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># 在 Web 微信中把自己加为好友
+bot.self.add()
+bot.self.accept()
+
+# 发送消息给自己
+bot.self.send('能收到吗？')
+</code></pre></div></div>
+
+<p>wxpy提供了注册消息的方法，可以将各种类型的消息注册并自定义处理方式。我们就是利用它来监听任何发送给自己的消息：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>from rasa_core.agent import Agent
+from rasa_core.interpreter import RasaNLUInterpreter
+
+@bot.register(bot.self, except_self=False)
+def reply_self(msg):
+    ans = agent.handle_message(msg.text)
+    # 自己训练好的NLU模型路径
+    nlu_model_path = '/home/luoling/rasa_nlu_chi/models/rasa_nlu_test/model_20171013-153447'
+    # agent = 自己训练好的policy模型 + NLU模型作为interpreter
+    agent = Agent.load("../babi/models/policy/current", interpreter=RasaNLUInterpreter(nlu_model_path))
+</code></pre></div></div>
+
+<p>重头戏分别是负责语言理解的<code class="language-plaintext highlighter-rouge">nlu_model</code>和负责对话管理的<code class="language-plaintext highlighter-rouge">agent</code>，将在下面两部分展开介绍。</p>
+
+<p>最后别忘了让程序保持运行：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># 进入 Python 命令行、让程序保持运行
+embed()
+</code></pre></div></div>
+
+<h3 id="python搭建微信公众号后台">python搭建微信公众号后台</h3>
+
+<blockquote>
+  <p>目前还在测试阶段，大部分时间无法正常使用，抱歉~</p>
+</blockquote>
+
+<p>我参考<a href="http://blog.gusibi.com/post/wechat-chatbot-step-by-step/">微信公众号搭chatbot</a>加上了公众号的支持，使用的原材料如下：</p>
+
+<ul>
+  <li>内存足够（tensorflow跑起来占400M左右）的VPS（我选的bandwagon 20G那个，一年$49.9，有更便宜的请务必告诉我）</li>
+  <li>微信订阅号</li>
+</ul>
+
+<p>最后的效果欢迎关注公众号测试：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/ZIxKkJNGoz2Q58V.jpg" alt="qrcode_for_gh_b9b48c1d57b2_430.jpg-38.4kB" /></p>
+
+<h3 id="整体来看">整体来看</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">__future__</span> <span class="kn">import</span> <span class="n">absolute_import</span>
+<span class="kn">from</span> <span class="n">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">from</span> <span class="n">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+<span class="kn">from</span> <span class="n">__future__</span> <span class="kn">import</span> <span class="n">unicode_literals</span>
+
+<span class="kn">import</span> <span class="n">logging</span>
+
+<span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="kn">from</span> <span class="n">rasa_core</span> <span class="kn">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="n">rasa_core.actions.action</span> <span class="kn">import</span> <span class="n">ACTION_LISTEN_NAME</span>
+<span class="kn">from</span> <span class="n">rasa_core.agent</span> <span class="kn">import</span> <span class="n">Agent</span>
+<span class="kn">from</span> <span class="n">rasa_core.channels.console</span> <span class="kn">import</span> <span class="n">ConsoleInputChannel</span>
+<span class="kn">from</span> <span class="n">rasa_core.domain</span> <span class="kn">import</span> <span class="n">TemplateDomain</span>
+<span class="kn">from</span> <span class="n">rasa_core.interpreter</span> <span class="kn">import</span> <span class="n">NaturalLanguageInterpreter</span>
+<span class="kn">from</span> <span class="n">rasa_core.policies</span> <span class="kn">import</span> <span class="n">Policy</span>
+<span class="kn">from</span> <span class="n">rasa_core.tracker_store</span> <span class="kn">import</span> <span class="n">InMemoryTrackerStore</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="p">.</span><span class="nf">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">CommonPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">predict_action_probabilities</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">tracker</span><span class="p">,</span> <span class="n">domain</span><span class="p">):</span>
+        <span class="c1"># type: (DialogueStateTracker, Domain) -&gt; List[float]
+</span>    <span class="c1">#将对应的意图与动作绑定
+</span>        <span class="n">responses</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="sh">"</span><span class="s">greet</span><span class="sh">"</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="sh">"</span><span class="s">goodbye</span><span class="sh">"</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="sh">"</span><span class="s">chat</span><span class="sh">"</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">tracker</span><span class="p">.</span><span class="n">latest_action_name</span> <span class="o">==</span> <span class="n">ACTION_LISTEN_NAME</span><span class="p">:</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">tracker</span><span class="p">.</span><span class="n">latest_message</span><span class="p">.</span><span class="n">intent</span><span class="p">[</span><span class="sh">"</span><span class="s">name</span><span class="sh">"</span><span class="p">]</span>
+            <span class="n">action</span> <span class="o">=</span> <span class="n">responses</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">responses</span> <span class="k">else</span> <span class="mi">4</span>
+            <span class="k">return</span> <span class="n">utils</span><span class="p">.</span><span class="nf">one_hot</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="n">domain</span><span class="p">.</span><span class="n">num_actions</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="p">.</span><span class="nf">zeros</span><span class="p">(</span><span class="n">domain</span><span class="p">.</span><span class="n">num_actions</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">HelloInterpreter</span><span class="p">(</span><span class="n">NaturalLanguageInterpreter</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="c1"># intent = "greet" if 'hello' in message else "default"
+</span>        <span class="k">global</span> <span class="n">intent</span>
+    <span class="c1">#进行意图识别
+</span>        <span class="k">if</span> <span class="sh">'</span><span class="s">hello</span><span class="sh">'</span> <span class="ow">in</span> <span class="n">message</span><span class="p">:</span>
+            <span class="n">intent</span><span class="o">=</span><span class="sh">'</span><span class="s">greet</span><span class="sh">'</span>
+        <span class="k">elif</span> <span class="sh">'</span><span class="s">goodbye</span><span class="sh">'</span> <span class="ow">in</span> <span class="n">message</span><span class="p">:</span>
+            <span class="n">intent</span><span class="o">=</span><span class="sh">'</span><span class="s">goodbye</span><span class="sh">'</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">intent</span><span class="o">=</span><span class="sh">'</span><span class="s">chat</span><span class="sh">'</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="sh">"</span><span class="s">text</span><span class="sh">"</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+            <span class="sh">"</span><span class="s">intent</span><span class="sh">"</span><span class="p">:</span> <span class="p">{</span><span class="sh">"</span><span class="s">name</span><span class="sh">"</span><span class="p">:</span> <span class="n">intent</span><span class="p">,</span> <span class="sh">"</span><span class="s">confidence</span><span class="sh">"</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">},</span>
+            <span class="sh">"</span><span class="s">entities</span><span class="sh">"</span><span class="p">:</span> <span class="p">[]</span>
+        <span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">run_hello_world</span><span class="p">(</span><span class="n">serve_forever</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="n">default_domain</span> <span class="o">=</span> <span class="n">TemplateDomain</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="sh">"</span><span class="s">./common_domain.yml</span><span class="sh">"</span><span class="p">)</span><span class="c1">#加载多个domain怎么办
+</span>    <span class="n">agent</span> <span class="o">=</span> <span class="nc">Agent</span><span class="p">(</span><span class="n">default_domain</span><span class="p">,</span>
+                  <span class="n">policies</span><span class="o">=</span><span class="p">[</span><span class="nc">CommonPolicy</span><span class="p">()],</span>
+                  <span class="n">interpreter</span><span class="o">=</span><span class="nc">HelloInterpreter</span><span class="p">(),</span>
+                  <span class="n">tracker_store</span><span class="o">=</span><span class="nc">InMemoryTrackerStore</span><span class="p">(</span><span class="n">default_domain</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">serve_forever</span><span class="p">:</span>
+        <span class="c1"># Attach the commandline input to the controller to handle all
+</span>        <span class="c1"># incoming messages from that channel
+</span>        <span class="n">agent</span><span class="p">.</span><span class="nf">handle_channel</span><span class="p">(</span><span class="nc">ConsoleInputChannel</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">agent</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="sh">'</span><span class="s">__main__</span><span class="sh">'</span><span class="p">:</span>
+    <span class="nf">run_hello_world</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h1 id="todo-list">Todo List</h1>
+
+<h2 id="future-work">Future Work</h2>
+
+<p>rasa扩展</p>
+
+<ul>
+  <li>目前对中文entity的处理还有问题（认“salad”但不认“麻辣烫”）</li>
+  <li>实现微信上的交互式训练，包括向提问人学习如何提问（能主动发起会话）；</li>
+  <li>如果能导出微信聊天数据的话就有很多dialogue了。读取历史聊天信息作为训练数据，充分发挥聊天app的优势，难点在于非结构数据的结构化；</li>
+  <li>增量式学习，在增加新语料时不用从头再来；</li>
+  <li>基于google搜索结果和QA模型做chatbot的百事通功能。</li>
+</ul>
+
+<p>微信扩展：</p>
+
+<ul>
+  <li>表情包推荐功能
+    <ul>
+      <li><a href="http://affect.media.mit.edu/pdfs/16.Chen-etal-ISM-full.pdf">预测gif情感</a></li>
+    </ul>
+  </li>
+  <li>结合语音判断情绪，作为辅助信息</li>
+  <li>个奇怪的问题：机器不会主动来”关心”你，这套体系更偏向商业应用，即解决用户的问题</li>
+  <li>NLG：自然语言生成</li>
+  <li>intent定义：现在还是很生硬的人工编辑，有没有可能自动地从对话中去提炼intent和action</li>
+  <li>目前的conversation representation是binary vector，是否能在语义空间做改进？类似encoder decoder那种</li>
+  <li>对抗式训练，做两个chatbot相互交流，不过得有一个objective function。忍不住想到一个世纪难题：把一个健身房教练和理发店造型师放一间房里，到底谁会先让谁办卡……</li>
+</ul>
+
+<h1 id="reference">Reference</h1>
+
+<ol>
+  <li><a href="https://medium.com/rasa-blog/a-new-approach-to-conversational-software-2e64a5d05f2a">浅谈垂直领域的chatbot</a></li>
+  <li>Rasa Blog: <a href="https://medium.com/rasa-blog/a-new-approach-to-conversational-software-2e64a5d05f2a">A New Approach to Conversational Software</a></li>
+</ol>
+
+<h1 id="补充qa系统">补充：QA系统</h1>
+
+<p>QA（Question Answering）即问答系统，目前研究集中在自然语言问答和视觉问答，分别基于给定的文字和图像回答特定问题。在Chatbot（聊天机器人）和智能客服中应用广泛。</p>
+
+<p>技术特点在于对问题（Question）和给定内容（Context）进行编码（encode），并从中解码（decode）出答案，事实上，相似模型也可应用在基于样例的语音关键词检测（Query-by-Example Spoken Term Detection）中，即对搜索内容（Query）和搜索对象（Context）进行编码，从中解码出关关键词（Query）出现与否以及关键词的出现位置。</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/Fg1iXRVMBC4oh8q.png" alt="屏幕快照 2017-11-26 14.02.43.png-405.2kB" /></p>
+
+<h1 id="reference-1">Reference</h1>
+
+<ul>
+  <li>
+    <p><a href="https://tryolabs.com/blog/2017/01/25/building-a-chatbot-analysis--limitations-of-modern-platforms/">Building a Chatbot: analysis &amp; limitations of modern platforms</a></p>
+
+  </li>
+</ul>]]></content><author><name></name></author><category term="NLP" /><category term="chatbot" /><summary type="html"><![CDATA[Rasa_NLU + Rasa_Core + wxpy = Wechat chatbot]]></summary></entry><entry><title type="html">基于音素识别的语音相似度研究</title><link href="https://rowl1ng.com/posts/2017/phoneme/" rel="alternate" type="text/html" title="基于音素识别的语音相似度研究" /><published>2017-08-01T13:27:00+00:00</published><updated>2017-08-01T13:27:00+00:00</updated><id>https://rowl1ng.com/posts/2017/phoneme</id><content type="html" xml:base="https://rowl1ng.com/posts/2017/phoneme/"><![CDATA[<h1 id="应用场景">应用场景</h1>
+
+<p>通话录音内容审核功能：关键词检索，实现内容审核。</p>
+
+<ol>
+  <li>首先要进行音频预处理，包括音频格式转码、语音降噪等，然后存储处理后的文件；</li>
+  <li>把结果反馈给业务网关，由音频比对对已知录音片段进行检测，如果有匹配这些录音片段就反馈结果——存在诈骗信息。</li>
+  <li>如果经过音频比对没有发现诈骗信息，就调用关键词检索服务。</li>
+</ol>
+
+<h1 id="研究背景">研究背景</h1>
+
+<p>音频可分为有内容和无内容两种。针对不同的数据类型有不同的检测技术。针对说话内容有语音识别、关键词检索等；针对语种的判别有语种识别技术；针对说话人的识别有声纹识别技术；针对说话内容无关的通常采用音频对比的技术进行检测。</p>
+
+<h2 id="无内容音频对比技术">无内容：音频对比技术</h2>
+
+<p>音频对比主要是从音频信号中提取特征，通过特征进行比对来检索。参考案例<a href="https://github.com/worldveil/dejavu">dejavu</a>。</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/ng4yKkOTJaIhrNA.png" alt="屏幕快照 2017-11-26 13.54.59.png-1749.8kB" /></p>
+
+<ul>
+  <li>提取特征：图中提取的特征点就是频谱最大值点。</li>
+  <li>特征构建：特征是通过最大值点之间的距离来建模，例如本案例中就采用的是两个最大值点的距离、位置信息作为一个固定的特征作为音频特征信息。</li>
+</ul>
+
+<p>有了上述音频特征后，就可以对两个不同音频进行检索，最大相似度的地方就是相似点。需要指出的是，这种技术最适用于录音片段的检索，如若音频内容相同但演绎方式不同（如不同人用不同语速、声调，使得提取的特征点不同）则无法有效识别。</p>
+
+<h2 id="有内容语音识别关键词检测">有内容：语音识别、关键词检测</h2>
+
+<p><img src="https://s2.loli.net/2025/08/18/Qed8YPbkCLws1RJ.png" alt="屏幕快照 2017-11-26 13.52.57.png-59.4kB" /></p>
+
+<p>相比语音助手等其他语音交互相关应用，话务场景下的识别准确率更为关键。然而，在电话录音识别检测场景中，通话质量不佳会导致准确率下降。
+改进方向：</p>
+
+<ul>
+  <li>不完全依赖ASR；</li>
+  <li>即使通话质量不佳，也能取得较好的检索效果。</li>
+</ul>
+
+<h3 id="语音关键词检出std">语音关键词检出（STD）</h3>
+
+<p>语音关键词检出是从给定的语料数据中查询指定关键词是否出现的任务.该任务在语音检索、电话监控、舆情分析等领域具有广泛的应用.根据关键词的输入形式,该任务可以分为基于文本和基于语音样例两种类型：</p>
+
+<ul>
+  <li>传统的基于文本的关键词检出技术又称为关键词搜索(keyword search,KWS)，通常基于一个大词汇量连续语音识别系统,在识别的NBest结果或者网格上进行搜索.</li>
+  <li>近年来，<strong>基于样例的语音关键词检出</strong> (query-by-example spoken term detection,<strong>QbyE-STD</strong>)成为新的研究热点.</li>
+</ul>
+
+<p>QbyE-STD目前通常有３种实现方法：</p>
+
+<ul>
+  <li>借鉴传统语音关键词检出的思路,称之为声学关键词检出(acoustic keyword spotting,AKWS).</li>
+  <li>借助其他语种成熟的语音识别系统进行解码,将查询样例和待检语音转换成<strong>音素序列</strong>或音
+素网格,而后进行字符串匹配,该类方法称之为字符搜索(symbolic search,SS).此类方法通常采用加权有限状态机(weighted finite state transducer,WFST)建立索引并进行快速查找.</li>
+  <li>基于经典的模板匹配的思路,采用动态时间规整(dynamictimewarping,DTW)将查询样例和待查语句进行匹配.由于查询语句的时长通常远远大于样例时长,因此需要在语句上进行<strong>滑动查找</strong>,常用策略包括Segmental-DTW、Subsequence-DTW
+、SLN-DTW (segmental local normalized-DTW)等。</li>
+</ul>
+
+<p><img src="https://s2.loli.net/2025/08/18/O5sxvfLtTNy2aHR.png" alt="s-dtw.png-1102.9kB" /></p>
+
+<h2 id="改进方案音素识别">改进方案：音素识别</h2>
+
+<p>结合应用场景，使用语音关键词检索技术，将通话录音识别结果输出音频检索网络，将指定的语音关键词转换成音素在检索网络中进行匹配，输出检索结果。</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/49v2wbN3gIKyuqa.png" alt="屏幕快照 2017-11-26 13.50.48.png-66kB" /></p>
+
+<h1 id="语音关键词检索">语音关键词检索</h1>
+
+<p>这种方式不仅绕开了生成文字所需的解码过程，提高检索效率，还能避免语音转文字可能带来的误差，提高识别准确率。例如将人名「张珊」转写成「张山」后就无法准确的检索正确的人名，而基于音素的检索是使用「zhang shan」进行匹配，很大概率上可以命中关键词。</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/ToV5riYROkxFcZL.png" alt="std.png-325.8kB" /></p>
+
+<h2 id="特征提取识别音素">特征提取：识别音素</h2>
+
+<h3 id="音素后验概率">音素后验概率</h3>
+
+<p>给定一帧语音的谱特征向量\(a\)，后验特征定义为在K个类别C1,C2,…,CK上的后验概率分布：
+\(P = [P(C_1|a),P(C_2|a),\dots,P(C_K|a)]\)
+\(P(C_i|a)\)谱特征(\(a\))在\(C_i\)(某个音素)上的后验概率，更好的鲁棒性（不同说话人）。
+例如，类别定义为音素，训练基于HMM的音素识别器对语音数据进行<code class="language-plaintext highlighter-rouge">解码</code>，得到在每个音素上的<code class="language-plaintext highlighter-rouge">打分</code>即为音素后验特征。 与此类似，针对语音数据训练具有K个成分Gauss混合模型(GMM)，然后对每帧语音数据在K个Gauss成分上打分，即可得到<strong>GMM后验特征</strong>(GMM posterior)。
+一般来说，音素后验特征在基于DTW的QbE-STD任务中的效果最好。 但是对于少资源语言来说，在没有该语种的专家知识和标注数据的情况下，通常无法训练音素识别器。 借用<code class="language-plaintext highlighter-rouge">其他语种</code>的音素识别器(不匹配音素识别)来获得音素后验特征，是一种普遍采用的做法。 此外，采用机器学习方法自动发现某种语言中的<code class="language-plaintext highlighter-rouge">“类音素”子词单元</code>，获得类音素后验特征也是一种可行的方法。</p>
+
+\[r(q_i,d_j)=\frac{U(q_{i}\cdot d_{j})-||q_i||||d_j||}{\sqrt {(U||q_i||^2-||q_i||)(U||d_j||^2-||d_j||)}}\]
+
+<p>1) CZ 音素后验： 布尔诺科技大学(Brno University of Technology，BUT)提供的捷克语音素识别器[16]在QUESST数据上解码获得的音素后验特征，音素个数为45。
+2) HU音素后验： BUT提供的匈牙利语音素识别器[16]在QUESST数据上解码获得的音素后验特征，音素个数61。
+3) RU音素后验： BUT提供的俄语音素识别器[16]在QUESST数据上解码获得的音素后验特征，音素个数为52。</p>
+<h3 id="ctc的tensorflow实现">CTC的tensorflow实现</h3>
+
+<p><a href="https://github.com/Rowl1ng/phoneme-ctc">github项目地址</a></p>
+
+<h2 id="实验数据">实验数据</h2>
+
+<p>采集了16人（8男8女）的语音数据，每人20句话。通过DTW计算相似度，设定阈值判断是否是相同内容。</p>
+
+<blockquote>
+  <p>“当我还只有六岁的时候，在一本描写原始森林，名叫《真实的故事》的书中， 看到了一副精彩的插画，画的是一条蟒蛇正在吞食一只大野兽，下面就是那副画的摹本”
+“这本书中写道：’这些蟒蛇把它们的猎获物不加咀嚼地吞下，一会儿后就不能再动弹了，它们就在长长的六个月的睡眠中消化这些食物。’”
+……
+——截选自《小王子》</p>
+</blockquote>
+
+<h2 id="实验效果">实验效果</h2>
+
+<ul>
+  <li>传统MFCC:对音频进行傅立叶变换，提取频谱能量分布特征</li>
+  <li>音素后验概率:训练音素识器，将音素识别结果作为特征
+    <ul>
+      <li>英文音素(39种)</li>
+      <li>中文音素(67种)</li>
+    </ul>
+  </li>
+</ul>
+
+<p><img src="https://s2.loli.net/2025/08/18/Zzyak2uh68OjlCo.png" alt="实验效果.png-179.3kB" /></p>
+
+<h1 id="reference">Reference</h1>
+
+<ul>
+  <li>
+    <p>GTM-UVigo Systems for the Query-by-Example Search on Speech Task at MediaEval 2015，Paula Lopez-Otero, Laura Docio-Fernandez, Carmen Garcia-Mateo
+Spoken Audio Search
+(or Query-by-Example Spoken-Term Detection)
+Given a spoken query we search for matches (at lexical level) within a set of  spoken documents
+• It is similar to Spoken Term Detection (NIST STD2006, OpenKWS) ut …
+Queries are spoken
+No prior information Different acoustic conditions “ear hi gforwhole do u e ts
+6 lang. (Albanian, Chinese, Czech, Portuguese, Romanian, Slovak)
+  •	19 hours of audio (dev = eval), per sentence segmentation
+  •	450 queries/dev, 450 queries/eval
+  •	Recorded in isolation by different speakers (some non-native of the language)
+  •	Utterance-level matching
+  •	Recorded with context New!
+  •	3 types of search
+  •	T1 - Exact match, dictated
+  •	T2 - Reordering and small variations, dictated
+  •	T3 - Reordering and small variations, conversational speech New!</p>
+  </li>
+  <li>基于分段动态时间规整和后验特征的中文语音模式发现</li>
+  <li>使 用 了 Ｂｒｎｏ 大 学 开 发 的 音 素 识 别 器 ＢＵT来提取音 素 后 验 特 征。
+约１０ｈ左右的中文广 播语料（ＴＤＴ２ 中文广播语料库），训练出中文音素识别器。
+无论是有无词边界信息的 情况下，音素后验特征的效果总是明显优于 ＭＦＣＣ 特征，特 别 是 在 多 说 话 人 的 语 料 上，后 验 特 征 对 ＦＭｅａｓｕｒｅ的提升 更 大。
+在 词 边 界 信 息 的 帮 助 下，语音模式发现的效果 提 升 明 显，不 仅 ＦＭｅａｓｕｒｅ 大大提高，在时间消耗上也要省得多。
+寻求一种直 接在声学信息上找出词或短语边界的方法，才能真 正使这种优势体现出来。</li>
+</ul>
+
+<h1 id="future-work">Future work</h1>
+
+<h2 id="todo-list">Todo list</h2>
+
+<ul>
+  <li>提升效率：DTW算法的时间复杂度是O(M x N)，尝试使用监督学习方法训练端到端识别网络，降低时间复杂度；</li>
+  <li>文本关键词检索：先将文本关键词转化为对应的音素特征，再来进行检索。</li>
+  <li>不确定是否需要一些标准化的措施。</li>
+</ul>
+
+<h2 id="things-to-learn">Things to learn</h2>
+
+<p>查询样例转换成音素序列后怎么查找</p>
+
+<ul>
+  <li>网格？</li>
+  <li>音素边界</li>
+</ul>
+
+<h1 id="补充">补充</h1>
+
+<h2 id="少资源语言关键词检出评测quesst">少资源语言关键词检出评测(QUESST)</h2>
+
+<p>跑通了上周提到的完成QUESST任务的一个项目，其使用的是BUT大学提供的<code class="language-plaintext highlighter-rouge">phnrec</code>工具来提取音素后验概率（音素模型是已经训练好的）。目前在Quesst数据集上跑通了，利用<code class="language-plaintext highlighter-rouge">phnrec</code>提取了自己采集的数据集的后验概率，之后还要进一步探索。</p>
+
+<p>具体参考<a href="http://speech.fit.vutbr.cz/software/quesst-2014-multilingual-database-query-by-example-keyword-spotting">QUESST 2014 Multilingual Database for Query-by-Example Keyword Spotting</a></p>
+
+<blockquote>
+  <p>QUESST瞄准少资源语言的关键词检出，评测数据中包含多种少资源语言的未标注语音数据，语音文件来自不同录制环境和多种说话风格，部分语音文件带有较强的背景噪声。</p>
+</blockquote>
+
+<blockquote>
+  <p>QUESST 2014任务提供了包含23 h的检索语料库，共12492句话。 用于算法调试的发展集关键词560个，最终评测集关键词555个。 语料涉及斯洛伐克语、 罗马尼亚语、 阿尔巴尼亚语、 捷克语、 巴斯克语和英语等6种语言，其中英语部分多来自非母语说话人。 在评测任务期间，语料库不提供任何语种信息。</p>
+</blockquote>
+
+<blockquote>
+  <p>评测任务分为3种不同类型的查询：</p>
+</blockquote>
+
+<blockquote>
+  <ul>
+    <li>1) 精确查询T1： 在语料库中找出与查询关键词精确匹配的地方。</li>
+    <li>2) 近似查询T2： 允许前后缀不同的匹配，例如给定的关键词是“friend”，可以匹配到语料库中包含“friendly”和“friends”单词的句子。</li>
+    <li>3) 近似查询T3： 在T2类型的基础上允许填充词和次序颠倒的匹配，例如给定的关键词为“white house”，在语料库中可以找到包含“house is whiter”的句子。</li>
+  </ul>
+</blockquote>
+
+<blockquote>
+  <p>评测结果采用最小交叉熵(Cnxe)和TWV(term weighted value)来衡量。 为了计算这2项指标，参加评测的队伍需要提交每个关键词在语料库中每个句子上的打分，用以表示该关键词与该句子的匹配分数。</p>
+</blockquote>
+
+<h2 id="语音智能客服">语音智能客服</h2>
+
+<p><img src="https://s2.loli.net/2025/08/18/fAC4eJckdE3DMTn.png" alt="屏幕快照 2017-11-26 14.13.59.png-239.2kB" /></p>
+
+<h2 id="电话诈骗识别">电话诈骗识别</h2>
+
+<p><img src="https://s2.loli.net/2025/08/18/PvResZ9Tglru2db.png" alt="phone_scam_detection.png-1408.4kB" /></p>]]></content><author><name></name></author><category term="Audio" /><category term="语音处理" /><category term="深度学习" /><summary type="html"><![CDATA[exploring how to find similar content without ASR for scam recognition task]]></summary></entry><entry><title type="html">肺部结节检测</title><link href="https://rowl1ng.com/posts/2017/luna/" rel="alternate" type="text/html" title="肺部结节检测" /><published>2017-04-25T21:38:00+00:00</published><updated>2017-04-25T21:38:00+00:00</updated><id>https://rowl1ng.com/posts/2017/luna</id><content type="html" xml:base="https://rowl1ng.com/posts/2017/luna/"><![CDATA[<h1 id="图像处理基础">图像处理基础</h1>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">origin</code>：表示CT图像最边缘的坐标</li>
+  <li><code class="language-plaintext highlighter-rouge">sapcing</code>：真实世界和像素的比例关系</li>
+</ul>
+
+<p><img src="http://upload-images.jianshu.io/upload_images/1156558-a483ffcb4ca3d4ee.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="此处输入图片的描述" /></p>
+
+<ul>
+  <li>统一spacing到0.5x0.5x0.5mm，也就是说96x96的patch对应现实中48x48mmm</li>
+</ul>
+
+<p>预处理阶段可能用到的包：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>from skimage.segmentation import clear_border
+from skimage.measure import label, regionprops
+from skimage.filters import roberts, sobel
+from scipy import ndimage as ndi
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection # 用于可视化3d图像
+from skimage.morphology import ball, disk, dilation, binary_erosion, remove_small_objects, erosion, closing, reconstruction, binary_closing
+</code></pre></div></div>
+<h2 id="肺部区域分割">肺部区域分割</h2>
+
+<p>参考<a href="https://www.kaggle.com/arnavkj95/candidate-generation-and-luna16-preprocessing/code">Candidate Generation and LUNA16 preprocessing
+</a>可实现肺部区域的分割，从而为下一步提取3d cube做准备。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def segment_lung_from_ct_scan(ct_scan):
+    return np.asarray([get_segmented_lungs(slice) for slice in ct_scan])
+
+def get_segmented_lungs(im, plot=False):
+
+    '''
+    This funtion segments the lungs from the given 2D slice.
+    '''
+    if plot == True:
+        f, plots = plt.subplots(8, 1, figsize=(5, 40))
+    '''
+    Step 1: Convert into a binary image.
+    '''
+    binary = im &lt; 200
+    if plot == True:
+        plots[0].axis('off')
+        plots[0].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 2: Remove the blobs connected to the border of the image.
+    '''
+    cleared = clear_border(binary)
+    if plot == True:
+        plots[1].axis('off')
+        plots[1].imshow(cleared, cmap=plt.cm.bone)
+    '''
+    Step 3: Label the image.
+    '''
+    label_image = label(cleared)
+    if plot == True:
+        plots[2].axis('off')
+        plots[2].imshow(label_image, cmap=plt.cm.bone)
+    '''
+    Step 4: Keep the labels with 2 largest areas.
+    '''
+    areas = [r.area for r in regionprops(label_image)]
+    areas.sort()
+    if len(areas) &gt; 2:
+        for region in regionprops(label_image):
+            if region.area &lt; areas[-2]:
+                for coordinates in region.coords:
+                       label_image[coordinates[0], coordinates[1]] = 0
+    binary = label_image &gt; 0
+    if plot == True:
+        plots[3].axis('off')
+        plots[3].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 5: Erosion operation with a disk of radius 2. This operation is
+    seperate the lung nodules attached to the blood vessels.
+    '''
+    selem = disk(2)
+    binary = binary_erosion(binary, selem)
+    if plot == True:
+        plots[4].axis('off')
+        plots[4].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 6: Closure operation with a disk of radius 10. This operation is
+    to keep nodules attached to the lung wall.
+    '''
+    selem = disk(10)
+    binary = binary_closing(binary, selem)
+    if plot == True:
+        plots[5].axis('off')
+        plots[5].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 7: Fill in the small holes inside the binary mask of lungs.
+    '''
+    edges = roberts(binary)
+    binary = ndi.binary_fill_holes(edges)
+    if plot == True:
+        plots[6].axis('off')
+        plots[6].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 8: Superimpose the binary mask on the input image.
+    '''
+#     get_high_vals = binary == 0
+#     im[get_high_vals] = 0
+#     if plot == True:
+#         plots[7].axis('off')
+#         plots[7].imshow(im, cmap=plt.cm.bone)
+
+    return binary
+</code></pre></div></div>
+<p><img src="https://s2.loli.net/2025/08/18/BvDAH5Ge8r27fiK.png" alt="image_1cdrhtvlq1v291i8a1ah217faiu89.png-83kB" /></p>
+
+<p>可视化3d肺部分割</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def plot_3d(image, threshold=-300):
+    from skimage import measure, feature
+
+    # Position the scan upright,
+    # so the head of the patient would be at the top facing the camera
+    p = image.transpose(2,1,0)
+    p = p[:,:,::-1]
+
+#     print measure.marching_cubes(p, threshold)
+    verts, faces, _, _= measure.marching_cubes(p, threshold)
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Fancy indexing: `verts[faces]` to generate a collection of triangles
+    mesh = Poly3DCollection(verts[faces], alpha=0.1)
+    face_color = [0.5, 0.5, 1]
+    mesh.set_facecolor(face_color)
+    ax.add_collection3d(mesh)
+
+    ax.set_xlim(0, p.shape[0])
+    ax.set_ylim(0, p.shape[1])
+    ax.set_zlim(0, p.shape[2])
+
+    plt.show()
+</code></pre></div></div>
+
+<p><img src="https://s2.loli.net/2025/08/18/bRExLuFCwvVHdoO.png" alt="image_1cdri1e721nbp1c7k1ve5nu2tpd1m.png-134.4kB" /></p>
+
+<p>去除假阳性</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>selem = ball(10)
+binary = binary_opening(segmented_ct_scan, selem)
+
+label_scan = label(binary)
+
+areas = [r.area for r in regionprops(label_scan)] # 找连通区域
+areas.sort()
+print areas
+</code></pre></div></div>
+<p><img src="https://s2.loli.net/2025/08/18/UIWAk6e7nRG5bys.png" alt="image_1cdri1qfm19g6t1e1bbg13441a3e23.png-128kB" /></p>
+
+<p>提取3d cube作为inference输入，所有cube的可视化：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/1FmKfiua6vNAHX2.png" alt="image_1cdrljm251gjg108t17fj1eit1bb92g.png-149.5kB" /></p>
+
+<p>差一步normalize到相同pixel spacing的过程：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/ta6EsPZ4nuyXVqK.png" alt="image_1ce5gjlu619aq325k941e6o14p29.png-142.7kB" /></p>
+
+<p>检查：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/AfhXHeF5ajc7dSm.png" alt="image_1ce6iegtia0mjhs46f1q3n1e1e9.png-16.5kB" /></p>
+
+<h1 id="模型">模型</h1>
+
+<p>考虑到3d场景下做目标检测的计算量，通常分两个阶段，先筛出可疑对象，再筛掉假阳性：</p>
+
+<h2 id="stage-1candidates-proposal">Stage 1：Candidates Proposal</h2>
+<p>这个阶段的任务是尽可能找出所有可能是结节的候选（candidate）</p>
+
+<h3 id="思路1segmentation">思路1：Segmentation</h3>
+
+<p>例如U-net，</p>
+
+<h4 id="merge-candidates">Merge Candidates</h4>
+
+<p>先腐蚀，再算连通性，再取label，每个label代表一个candidate，取mass中心，存储为csv
+对照annotations.csv得到每个candidate的是TP还是FP的label，得到新的csv（最后一列为true/false的标记）
+欧式距离</p>
+
+<h3 id="思路2-object-detection">思路2: Object Detection</h3>
+
+<p>例如Faster RCNN，使用2D模型处理3D检测问题，例如每个通道代表z轴的一个slice，这样就有3个slice组成的3通道二维图像，即形如\(600\times 600 \times 3\)的image。每个通道可以是相邻的slice。</p>
+
+<p>需要注意的是：考虑到肺结节的尺度比常规的自然图像中的物体要小得多，而原始的Faster RCNN使用的是16倍降采样（VGG-16Net的前四个卷积group作为feature extraction），需要通过减小降采样的方式提升ROI检测的效果。有两种思路：</p>
+
+<ol>
+  <li>减少feature extractor的maxpooling层：例如删掉某个group中的maxpooling</li>
+  <li>在feature extractor最后增加deconvolutional layer：例如 <code class="language-plaintext highlighter-rouge">nn.ConvTranspose2d(1024, 1024, 4, 4, 4)</code>会上采样4倍，这样最终是降采样4倍</li>
+</ol>
+
+<p>另一个相伴相生的问题：标注的大小。normalize之后的结节标注可能只有1个像素大小（可能是医生标注的问题），这样即使是4倍下采样也达不到检出效果。我的方案是中心不变、扩大到8个像素。</p>
+
+<h4 id="rpn">RPN</h4>
+
+<ul>
+  <li>input：image;</li>
+  <li>output：一系列矩形框，代表ROI，每个框都有一个objectness score，代表是物体的概率。</li>
+</ul>
+
+<h2 id="stage2false-positive--reduction">Stage2：False Positive  Reduction</h2>
+
+<h3 id="2d-resnet">2D Resnet</h3>
+
+<p>可参考<a href="https://github.com/gzuidhof/luna16">LUNA16 Lung Nodule Analysis</a></p>
+
+<p>First we equalize the spacings tp 0.5mm0.5mm0.5mm using src/data_processing/equalize_spacings.py. Then we create the 96x96 patches in all three orientations using src/data_processing/create_xy_xz_yz_CARTESIUS.py. Scripts to perform this using SLURM for job management (will require some editing of paths) can be found in /scripts/create_patches/ and /scripts/rescale</p>
+
+<ul>
+  <li>取三个轴向的切面(patch)，根据candidate的label存储在true/false文件夹下</li>
+</ul>
+
+<h3 id="3d-conv">3d conv</h3>
+
+<p>由于ct是三维的，考虑使用常见的2d U-net的3d版本。</p>
+
+<p>可参考：</p>
+
+<ul>
+  <li><a href="https://www.kaggle.com/c/data-science-bowl-2017/details/tutorial">U-Net Segmentation Approach to Cancer Diagnosis</a></li>
+  <li>在luna上的3dconv的unet实现：<a href="https://github.com/Wrosinski/Kaggle-DSB/blob/master/LUNA/models/U-Net%203D/3DUNet_train_generator.py">Kaggle U-net</a></li>
+  <li>keras 提供的<a href="https://keras-cn.readthedocs.io/en/latest/layers/convolutional_layer/">conv3d</a>：</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>keras.layers.convolutional.Conv3D(
+    filters, # 卷积核的数目（即输出的维度）
+    kernel_size, # 单个整数或由3个整数构成的list/tuple，卷积核的宽度和长度。如为单个整数，则表示在各个空间维度的相同长度。
+    strides=(1, 1, 1),
+    padding='valid',
+    data_format=None,
+    dilation_rate=(1, 1, 1),
+    activation=None,
+    use_bias=True,
+    kernel_initializer='glorot_uniform',
+    bias_initializer='zeros',
+    kernel_regularizer=None,
+    bias_regularizer=None,
+    activity_regularizer=None,
+    kernel_constraint=None,
+    bias_constraint=None)
+</code></pre></div></div>
+
+<p>三维卷积对三维的输入进行滑动窗卷积，当使用该层作为第一层时，应提供input_shape参数。例如input_shape = (3,10,128,128)代表对10帧128*128的彩色RGB图像进行卷积。数据的通道位置仍然有data_format参数指定。</p>
+
+<p>输入shape</p>
+
+<ul>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">‘channels_first’</code>模式下，输入应为形如<code class="language-plaintext highlighter-rouge">（samples，channels，input_dim1，input_dim2, input_dim3）</code>的5D张量</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">‘channels_last’</code>模式下，输入应为形如<code class="language-plaintext highlighter-rouge">（samples，input_dim1，input_dim2, input_dim3，channels）</code>的5D张量</p>
+  </li>
+</ul>
+
+<p>这里的输入shape指的是函数内部实现的输入shape，而非函数接口应指定的input_shape。</p>
+
+<h1 id="评价指标">评价指标</h1>
+
+<p><a href="https://luna16.grand-challenge.org/evaluation/">Luna官方说明</a>：The evaluation is performed by measuring the detection sensitivity of the algorithm and the corresponding false positive rate per scan.</p>
+
+<ul>
+  <li>TP判定（hit criterion）：candidate必须是在standard reference 中以nodule center为中心的半径R（结节直径除2）之内。hit到一个正例之后就将这个例子从表中除去，保证不重复计数。也就是说，又有第二个预测点hit到这个结节时就被忽略，不算TP。</li>
+  <li>FP判定：在设定的半径距离内没有hit到任何reference结节.</li>
+  <li>忽略的情况：Candidates that are detecting irrelevant findings (see Data section in this page for definition) are ignored during the evaluation and are not considered either false positives or true positives.</li>
+</ul>
+
+<p>最终的分数是取7个横座标点对应的纵座标（TPR）均值：</p>
+
+<ul>
+  <li>横座标（FPR）： 1/8, 1/4, 1/2, 1, 2, 4, and 8 FPs per scan</li>
+  <li>完美是1，最低是0. Most CAD systems in clinical use today have their internal threshold set to operate somewhere between 1 to 4 false positives per scan on average. Some systems allow the user to vary the threshold. To make the task more challenging, we included low false positive rates in our evaluation. This determines if a system can also identify a significant percentage of nodules with very few false alarms, as might be needed for CAD algorithms that operate more or less autonomously.</li>
+</ul>
+
+<p>论文里关于FROC的说明：</p>
+
+<p>sensitivity是关于FPR平均值的函数：</p>
+
+<p>This means that the sensitivity (y) is plotted as a function of the average number of false positive markers per scan ().</p>
+
+<ul>
+  <li>计算FROC曲线：阈值为t，概率p≥ t则判定为结节，由此计算TPR、FPR，得到曲线上的一个点。</li>
+  <li>图像ID号（seriesuid）：发现结果所在的scan的名字。</li>
+  <li>三维坐标：浮点数（用小数点，不要用逗号）。注意：我们提供的数据的第一个体素（voxel） 的坐标是 (-128.6,-175.3,-298.3). Coordinates are given in world coordinates or millimeters. You can verify if you use the correct way of addressing voxels by checking the supplied coordinates for the example data, the locations should refer to locations that hold a nodule.</li>
+  <li>probability : 描述为真结节的可疑程度，浮点数。通过调节对它设定的<strong>阈值</strong>来计算 <strong>FROC曲线</strong>。</li>
+</ul>
+
+<p>Between the strings and the numbers should be a comma character. The order of the lines is irrelevant.</p>
+
+<p>The following is an example result file:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>seriesuid,coordX,coordY,coordZ,probability
+LKDS_00001,75.5,56.0,-194.254518072,6.5243e-05
+LKDS_00002,-35.5999634723,78.000078755,-13.3814265714,0.00269234
+LKDS_00003,80.2837837838,198.881575673,-572.700012,0.00186072
+LKDS_00004,-98.8499883785,33.6429184312,-99.7736607907,0.00035473
+LKDS_00005,98.0667072477,-46.4666486536,-141.421980179,0.000256219
+
+</code></pre></div></div>
+<p>This file contains 8 findings (obviously way too few). There are 5 unique likelihood values. This means that there will be 5 unique thresholds that produce a distinct set of findings (each threshold discards finding below the threshold. That means there will be 5 points on the FROC curve.</p>
+
+<p>It has to be noted that for the ‘false positive reduction’ challenge track, 551,065 findings (the amount of given candidates) are expected. The order of the lines is irrelevant.</p>]]></content><author><name></name></author><category term="2D Vision" /><category term="医疗图像" /><summary type="html"><![CDATA[experience in the Tianchi Lung Nodule Detection Contest]]></summary></entry><entry><title type="html">裂缝识别</title><link href="https://rowl1ng.com/posts/2015/RoadNN/" rel="alternate" type="text/html" title="裂缝识别" /><published>2015-10-18T11:12:00+00:00</published><updated>2015-10-18T11:12:00+00:00</updated><id>https://rowl1ng.com/posts/2015/RoadNN</id><content type="html" xml:base="https://rowl1ng.com/posts/2015/RoadNN/"><![CDATA[<p>公路在使用过程中，总会因为行车、自然因素出现裂缝，这些裂缝如果不及时维护（填沥青）的话，可能会影响到车辆的正常通行。</p>
+
+<p>可是真是环境总是变化多样的，光照、磨损会带来各种干扰或是消弭调裂缝本身的可见性。于是乎，机器识别达不到的正确率只能靠人力来弥补了。</p>
+
+<p>但是这种单调、工作量大的活儿还是交给机器来做成本更低嘛。</p>
+
+<p>所以我们就要用机器学习的思路来做啦～传统的就是基于特征，不管之后学习算法用的是SVM还是BP，第一步总归是人的脑力风暴来决定提取那些特征以及怎样提取。</p>
+
+<p>可是现在有了深度学习就不一样了，输入的图片还是原原本本的样子，顶多是做一下压缩。</p>
+
+<p>我们现在实现的模型也就是基于多层的卷积操作和pooling操作（有的地方译作池化）来逐渐“降维”，最终原来image大小的图就被一群方格代表了（我们的输出粒度是方格大小）。</p>
+
+<p>而我现在又有想要把attention融进来的念头，毕竟卷积在做判断（softmax）的时候还是局部性的考虑，对有裂缝或是没裂缝如果说最后是有这个filter的话，应该说还是固定的，而如果能结合周围的方格状况综合考虑的话，就不算太死板。</p>
+
+<h2 id="introduction">Introduction</h2>
+
+<p>首先将原始图片划分为同等大小的方形区域，对这些block进行识别，可看做是粗粒度的pixel-wise图像标记，目前的标记只有两种：有裂缝、无裂缝。</p>
+
+<p>在前期试验中，我们仅使用CNN可以很好地提取图片特征进行分类，但是：</p>
+
+<ul>
+  <li>会出现孤立“噪点”————与裂缝特征相近的单个小块被错误识别为裂缝。由于工程应用中对裂缝的定义是连续线条，这些噪点会对最后的结果带来误差。</li>
+  <li>此外，有些裂纹会在中间一段不明显，CNN方法不会将这部分识别为裂缝，而工程应用恰恰需要把它们连成一体。</li>
+  <li>通过单一的卷积神经网络的方法对病害中的裂缝和条形修补进行识别，在路况良好（无光照阴影，路面清洁，老化不严重）的路上识别的准确率可以达到90%以上，但是对路况普通（存在光照等问题，也存在较好路况）的路面，效果一般，准确率只能达到70%左右。</li>
+</ul>
+
+<p>因此，我们通过在CNN后增加probability inference模块改进算法：</p>
+
+<p><strong>Conditional Random Fields(CRF)</strong>用于pixel-wise的图像标记（其实就是图像分割）。把像素的label作为形成马尔科夫场随机变量且能够获得全局观测时，CRF便可以对这些label进行建模。这种全局观测通常就是输入图像。即在判断某一个方格时需要考虑整张图的情况，从而解决“噪点”和连接的问题。</p>
+
+<p>输入图像：
+\(x=\{x_1,\dots,x_P\}\)
+$P$为像素数。</p>
+
+<p>目标输出：
+\(y=\{y_1,\dots,y_B\},y_i \in L=\{l_1,l_2,\dots,l_L\}\)
+因为我们判断的是每一方格<strong>是不是</strong>裂缝。因此这里的标签$L$目前只有两种。\(y_i\)即为第\(i\)个方格的标签。</p>
+
+<p>主要参考论文：<strong>《Conditional Random Fields as Recurrent Neural Networks》</strong></p>
+
+<p>Github : <a href="https://github.com/torrvision/crfasrnn">CRF-RNN for Semantic Image Segmentation</a></p>
+
+<p><img src="https://github.com/torrvision/crfasrnn/raw/master/sample.png" alt="Semantic Image Segmentation" /></p>
+
+<ul>
+  <li>Contribution：这篇论文最重要的工作就是<strong>end-to-end</strong>训练。CNN负责产生unary potential，intuitively上更合理，实验效果也证明有提高。具体通过两方面来实现：
+    <ul>
+      <li>mean-field CRF 的RNN实现：将mean-field算法的步骤分解为CNN，这样通过迭代就成了RNN。</li>
+      <li>error differential 的反向传递，CRF的error derivative直接传到了CNN。</li>
+    </ul>
+  </li>
+  <li>关键问题：将 label assignment problem 转化为 probability inference problem ，融入对相似像素的<strong>标签一致性</strong>的推断。</li>
+  <li>目标：从 coarse 到 fine-grained segmentation ，弥补 CNN 在 pixel-level labeling task 上的不足。</li>
+</ul>
+
+<h2 id="1-理论部分">1. 理论部分</h2>
+
+<h3 id="feature-extraction--cnn"><a href="https://rowl1ng.gitbooks.io/machine-learning/content/cnn.html">Feature Extraction : CNN</a></h3>
+
+<p><img src="https://s2.loli.net/2025/08/18/LBaUmFz6kMdQT38.png" alt="此处输入图片的描述" /></p>
+
+<p>##</p>
+
+<p>我们的目标输出为总方格数$B$(blocks)的$D$维vectors矩阵，
+相当于实现：\(img_h \times img_w \Longrightarrow block_h \times block_w \times D\)</p>
+
+<ul>
+  <li>卷积：Conv2D 维数不变</li>
+  <li>池化：Maxpooling2D  缩小维数
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">pool_size</code></li>
+      <li><code class="language-plaintext highlighter-rouge">stride</code></li>
+    </ul>
+  </li>
+</ul>
+
+<p>执行5次<code class="language-plaintext highlighter-rouge">pool_size</code>=2<em>2的池化就相当于\(\frac {输入图片大小}{2^5}\),这样原来的640</em>928就一步步变成了20*29。
+相当于32 bits prediction
+在对原始图像进行“缩放”的同时，我们实际上通过卷积操作提取每一方格内图像的标注向量<strong>annotation  vector</strong>：</p>
+
+<ul>
+  <li>\(B\)个 annotation vector，对应\(B\)个方格</li>
+  <li>每个vector都是\(D\)维(dimension)的</li>
+</ul>
+
+\[a=\{\mathbf a_1,\dots,\mathbf a_B\},\mathbf a_i \in \mathbb R^D\]
+
+<p>without considering the <strong>smoothness and consistency</strong> of the label assignment.
+因此需要考虑pairwise data-dependant smoothing term.
+作为CRF的一元势能量。</p>
+
+<p>这一阶段要考虑的参数：</p>
+
+<ul>
+  <li>receptive field</li>
+  <li>subsampling rate</li>
+</ul>
+
+<h3 id="关于rnn"><a href="https://rowl1ng.gitbooks.io/machine-learning/content/rnn.html">关于RNN</a></h3>
+
+<p><img src="http://colah.github.io/posts/2015-08-Understanding-LSTMs/img/RNN-unrolled.png" alt="此处输入图片的描述" /></p>
+
+<h3 id="关于crf概率图模型">关于CRF(概率图模型)</h3>
+
+<p>下面来讲 CRF 用于 pixel-wise 的图像标记（其实就是图像分割）。当把像素的label作为形成马尔科夫场的随机变量，且能够获得全局观测时，CRF便可以对这些label进行建模。</p>
+
+<p><img src="http://img.blog.csdn.net/20160423111733218" alt="CRF" /></p>
+<blockquote>
+  <p>图中的\(y_i\)为观测，即像素。</p>
+</blockquote>
+
+<p>定义随机变量\(X_i\)是像素\(i\)的标签。</p>
+
+\[X_i \in L={l_1,l_2,...,l_L}\]
+
+<ul>
+  <li>\(X\)：由\(X_1,X_2,...,X_N\)组成的随机向量；</li>
+  <li>\(N\)就是图像的像素个数。</li>
+</ul>
+
+<p>假设图\(G=(V,E)\)，其中\(V={X_1,X_2,\dots,X_N}\)，全局观测为（image）\(I\)。\((I,X)\)即基于Gibbs分布的CRF模型：</p>
+
+\[P(X=x|I)=\frac 1{Z(I)}exp(-E(x|I))\]
+
+<table>
+  <tbody>
+    <tr>
+      <td>\(Z(I)\)是所有可能labeling的集合，保证$$P(X=x</td>
+      <td>I)$$在0~1。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>条件随机场图像分割能量函数的构造：</p>
+
+\[E(x)=\sum _i \varphi_u(x_i)+\sum _{i&lt;j} \varphi_p(x_i.x_j)\]
+
+<p>这里的\(E\)可以理解为能量，也就是cost。其中\(\varphi_u(x_i)\)是将像素\(i\)标记为\(x_i\)的inverse likelihood，\(\varphi_p(x_i.x_j)\)是将\(i\)、\(j\)同时标记为\(x_i\)、\(x_j\)的能量。</p>
+
+<h4 id="recall-the-hmm-">Recall the HMM :</h4>
+
+<p>在做NLP的Part-of-Speech tagging（adj. n. v. prep. adv.）的时候，下层的是它的观测(word)，上层就是 word对应的词性label。</p>
+
+\[p(l,s)=p(l_1)\prod_i p(l_i|l_{i-1})p(\omega_i|l_i)\]
+
+<p>(<strong>transition</strong> probability x <strong>emission</strong> probability)。</p>
+
+<p>对比一下的话，CRF可以使用更多global features，而HMM只考虑前一个label。比如POS任务里，句子结尾的一个问号增大第一个词标记为动词的概率。或许看下面这张图会领会更多：</p>
+
+<p><img src="https://s2.loli.net/2025/08/18/8khAdE5tNwxmX9r.png" alt="1d3f9cefc0de33cfebe71bbc237ccc6b_b.png-80.1kB" /></p>
+
+<blockquote>
+  <p>关于CRF更详细的内容可参考论文： 《 <a href="http://homepages.inf.ed.ac.uk/csutton/publications/crftut-fnt.pdf">An introduction to conditional random fields</a> 》</p>
+</blockquote>
+
+<hr />
+
+<h2 id="2-网络构建">2. 网络构建</h2>
+
+<ul>
+  <li>结构：
+    <ul>
+      <li>CNN :<strong>unary</strong> potential：
+\(\varphi_u(x_i)\)</li>
+      <li>CRF : <strong>pairwise</strong> potential as weighted Gaussians.</li>
+    </ul>
+  </li>
+</ul>
+
+\[\varphi_p(x_i.x_j)=\mu (x_i,x_j)\sum_{m=1}^M \omega ^{(m)}k_G^{(m)}(\mathbf f_i,\mathbf f_j)\]
+
+<p>其中</p>
+
+\[k^{(m)}(\mathbf f_i,\mathbf f_j)=\exp(-\frac 12(\mathbf f_i-\mathbf f_j)^{\mathrm T}\varLambda^{(m)}(\mathbf f_i-\mathbf f_j))\]
+
+<p>\(\mathbf f_i\)是像素\(i\)的feature vector，这里是从原图片中提取的。
+<strong>Potts Model</strong> ： \(\mu(x_i,x_j)=[x_i \neq x_j]\) 是对位置接近的相似像素标记不同的惩罚项。</p>
+
+<ul>
+  <li>inference method
+    <ul>
+      <li><strong>back propagation</strong> : 论文中使用的是<strong>SGD</strong>来进行反向传播；</li>
+      <li><strong>minibatch</strong> ：训练时可以用一整张图，也可以用多张图。</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="mean-field--cnn--softmax">Mean-field = CNN + softmax</h3>
+
+<p>基于平均场，使用更简单的分布\(Q(\mathbf X)\)来逼近CRF的\(P(\mathbf X)\)：</p>
+
+\[U_i(l)=-\varphi_u(\mathbf X_i=l) \\
+Z_i=\sum_l \exp (U_i(l))\]
+
+<h4 id="1-首先初始化">1. 首先初始化：</h4>
+
+<p>对每个像素上的所有label做softmax：</p>
+
+\[Q_i(l) \leftarrow \frac 1{Z_i}\exp (U_i(l)) \\\]
+
+<p>等同于softmax ： \(h_j = \frac{e^{z_j}}{\sum{e^{z_i}}}\)</p>
+
+<p>由于这里不涉及其他参数，因此梯度在经过softmax的反向计算后直接传给unary potentials。</p>
+
+\[\frac{\partial h_{j}}{\partial z_{k}} = h_{j}\delta_{kj}-h_{j}h_{k}\]
+
+<h4 id="2-message-passing">2. Message passing:</h4>
+
+<p>对\(Q\)进行\(M\)个高斯滤波：</p>
+
+\[Q_j(l) \leftarrow \sum_{i \neq j} k^{(m)}(\mathbf f_i,\mathbf f_j)Q_j(l)\]
+
+<ul>
+  <li>Gaussian kernel
+    <ul>
+      <li>edge-preserving Gaussian filters</li>
+      <li>coefficient直接从像素位置、RGB信息中来，反映和其他像素的关联程度</li>
+    </ul>
+  </li>
+  <li>这里的CRF是potentially fully connected ，每个filter的receptive field都是整张图，强制实现不可行。
+    <ul>
+      <li>为了提高高位高斯铝箔的速度，使用的是Andrew Adams et al所提出的<a href="http://blog.csdn.net/xuanwu_yan/article/details/7962508"><strong>Pemutohedral Lattice</strong></a>，时间复杂度\(O(n)\)。</li>
+    </ul>
+  </li>
+</ul>
+
+<p>补充：
+(1) 如果是<strong>稀疏条件随机场</strong>，那么我们构造图模型的边集合E就是：每对相邻的像素点间可以构造一条边。当然除了4邻域构造边之外，你也可以用8邻域模型。
+(2) <strong>全连接条件随机场</strong>与稀疏条件随机场的最大差别在于：每个像素点都与所有的像素点相连接构成连接边。这就恐怖了，如果一张图像是\(100 \times 100\)，那么就相当于有10000个像素点，因此如果采用全连接条件随机场的话，那么就会构造出约\(10000 \times 10000\)条边。如果图像大小再大一些，那么就会变得非常恐怖，普通条件随机场推理算法，根本行不通。</p>
+
+<p><img src="http://img.my.csdn.net/uploads/201211/03/1351909905_5548.png" alt="此处输入图片的描述" /></p>
+
+<p><img src="http://img.my.csdn.net/uploads/201209/21/1348218477_3540.png" alt="此处输入图片的描述" /></p>
+
+<ul>
+  <li>分为三个步骤：
+    <ul>
+      <li>splat</li>
+      <li>blur</li>
+      <li>slice</li>
+    </ul>
+  </li>
+  <li>
+    <p>误差反向通过filter，逆转blur阶段filter的顺序，时间复杂度\(O(n)\)。</p>
+  </li>
+  <li>2 Guassian Kernel：<a href="http://homepages.inf.ed.ac.uk/rbf/CVonline/LOCAL_COPIES/MANDUCHI1/Bilateral_Filtering.html#The%20Gaussian%20Case">Bilateral filter</a> 和Spatial filter两种滤波器</li>
+</ul>
+
+<h4 id="3-weighting-filter-outputs">3. Weighting Filter Outputs</h4>
+
+<p>为每个标签计算\(M\)个filter输出的weighted sum ，可以看成是有\(M\)个输入channel、1个输出channel的卷积操作。</p>
+
+\[Q_i(l) \leftarrow \sum _m \omega ^{(m)}Q_i^{(m)}(l)\]
+
+<p>考虑到识别对象，这里针对每个标签使用不同的spatial kernel和bilateral kernel权重，作者举的例子是bilateral filter 在识别自行车上很重要（此时颜色的相似性很关键），但识别电视机就不那么重要（电视机有各种颜色）。</p>
+
+<h4 id="4-compatibility-transform">4. Compatibility Transform</h4>
+
+\[Q_i(l) \leftarrow \sum _{l' \in \mathcal L}\mu (l,l')Q_i(l)\]
+
+<ul>
+  <li>\(\mu (l,l')\)：两个标签之间的compatibility
+    <ul>
+      <li>如果相似像素标签不同就有 penalty。Intuitively,不同的 label pair 有不同的penalty会合理一些。</li>
+    </ul>
+  </li>
+  <li>同样可看作是<strong>卷积</strong>操作，且输入输出都有\(L\)个channel，学习filter的参数就是在学习函数\(\mu(.,.)\)</li>
+</ul>
+
+<p>至此完成了构造\(\varphi_p(x_i,x_j)\)的任务。</p>
+
+<h4 id="5-unary-compatibility-transform">5. unary-compatibility transform</h4>
+
+<p>计算\(E(\mathbf x)\)：</p>
+
+\[Q_i(l) \leftarrow U_i(l)-Q_i(l)\]
+
+<ul>
+  <li>未引入其他参数，误差直接传递给两个输入，注意符号</li>
+</ul>
+
+<h4 id="6-normalizationsoftmax">6. Normalization：softmax</h4>
+
+<table>
+  <tbody>
+    <tr>
+      <td>计算$$P(\mathbf X=\mathbf x</td>
+      <td>\mathbf I)$$：</td>
+    </tr>
+  </tbody>
+</table>
+
+\[Q_i(l) \leftarrow \frac 1{Z_i}\exp (Q_i(l))\]
+
+<ul>
+  <li>softmax的反向传播</li>
+</ul>
+
+<hr />
+
+<h3 id="iterable-mean-field--rnn">Iterable Mean-field = RNN</h3>
+
+<ul>
+  <li>\(Q_{in}\)：an estimation marginal probability from the previous iteration:</li>
+</ul>
+
+\[f_{\theta}(U,Q_{in},I) \\
+\theta=\{\omega^{(m)},\mu(l,l')\},\\
+m\in \{1,\dots,M\},l,l' \in \{l_1,\dots,l_L\}\]
+
+<p>迭代结构等同于RNN，假设迭代T次：</p>
+
+<ul>
+  <li>t=0,使用softmax（U）来初始化</li>
+  <li>t&gt;1,每轮$f_{\theta}$中的$Q_{in}$为上一轮输出</li>
+  <li>输出$Y$</li>
+  <li>学习算法：BP through time
+    <ul>
+      <li>
+        <dl>
+          <dt>5次迭代即可收敛，再增加可能导致vanishing和exploding gradient problems。</dt>
+          <dd>实现Bilateral filter 的bilateral_lattices_和实现Spatial filter的spatial_lattice</dd>
+        </dl>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+
+<h2 id="3-caffe上的实现">3. Caffe上的实现</h2>
+
+<p>Caffe 是由伯克利大学视觉和学习中心开发的一种深度学习框架。在视觉任务和卷积神经网络模型中，Caffe 格外受欢迎且性能优异。</p>
+
+<p>输入图像：</p>
+
+<p>\(x=\{x_1,\dots,x_P\}\)
+$P$为像素数。</p>
+
+<p>目标输出：</p>
+
+\[y=\{y_1,\dots,y_B\},y_i \in L=\{l_1,l_2,\dots,l_L\}\]
+
+<p>因为我们判断的是每一方格<strong>是不是</strong>裂缝。因此这里的标签$L$只有两种。$y_i$即为第$i$个方格的标签。</p>
+
+<h3 id="自己写python层作为输入层">自己写Python层作为输入层</h3>
+
+<p>road_layer.py</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>self.x = np.load(os.path.join(CACHE_PATH, 'x_{}.npy'.format(self.split)))
+self.y = np.load(os.path.join(CACHE_PATH, 'y_{}.npy'.format(self.split)))
+</code></pre></div></div>
+
+<ul>
+  <li>setup()是类启动时该做的事情，比如层所需数据的初始化。</li>
+  <li>reshape()就是取数据然后把它规范化为四维的矩阵。每次取数据都会调用此函数。</li>
+  <li>forward()就是网络的前向运行，这里就是把取到的数据往前传递，因为没有其他运算。
+    <ul>
+      <li>assign output</li>
+      <li>pick next input</li>
+    </ul>
+  </li>
+  <li>backward()就是网络的反馈，data层是没有反馈的，所以这里就直接pass。</li>
+</ul>
+
+<h3 id="生成训练网络">生成训练网络</h3>
+
+<p>net.py生成网络结构文件</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    n.data, n.label = L.Python(module='road_layer', layer='ROADSegDataLayer',
+            ntop=2, param_str=str(pydata_params))
+
+    # the base net
+    n.conv1_1, n.relu1_1 = conv_relu(n.data, 32, ks=5)
+    n.conv1_2, n.relu1_2 = conv_relu(n.relu1_1, 32, ks=5)
+    n.pool1 = max_pool(n.relu1_2)
+
+    n.conv2_1, n.relu2_1 = conv_relu(n.pool1, 64)
+    n.conv2_2, n.relu2_2 = conv_relu(n.relu2_1, 64)
+    n.pool2 = max_pool(n.relu2_2)
+
+    n.conv3_1, n.relu3_1 = conv_relu(n.pool2, 128)
+    n.conv3_2, n.relu3_2 = conv_relu(n.relu3_1, 128)
+    n.pool3 = max_pool(n.relu3_2)
+
+    n.conv4_1, n.relu4_1 = conv_relu(n.pool3, 256)
+    n.conv4_2, n.relu4_2 = conv_relu(n.relu4_1, 256)
+    # n.conv4_3, n.relu4_3 = conv_relu(n.relu4_2, 512)
+    n.pool4 = max_pool(n.relu4_2)
+
+    n.conv5_1, n.relu5_1 = conv_relu(n.pool4, 256)
+    n.conv5_2, n.relu5_2 = conv_relu(n.relu5_1, 256)
+    # n.conv5_3, n.relu5_3 = conv_relu(n.relu5_2, 512)
+    n.pool5 = max_pool(n.relu5_2)
+
+    n.score = conv(n.pool5, 1)
+    n.loss = L.SigmoidCrossEntropyLoss(n.score, n.label)
+    # n.loss = L.MultiStageMeanfield()
+</code></pre></div></div>
+<p>分别为一次导入的图片个数，channel，heigth ，width。</p>
+
+<h3 id="solver-优化"><a href="https://rowl1ng.gitbooks.io/machine-learning/content/optimizer.html">Solver 优化</a></h3>
+
+<p>此处的SGD指mini-batch gradient descent，关于batch gradient descent, stochastic gradient descent, 以及 mini-batch gradient descent的具体区别就不细说了。现在的SGD一般都指mini-batch gradient descent。
+SGD就是每一次迭代计算梯度，然后对参数进行更新，是最常见的优化方法了。
+此处主要说下SGD的缺点：（正因为有这些缺点才让这么多大神发展出了后续的各种算法）</p>
+
+<ul>
+  <li>选择合适的learning rate比较困难</li>
+  <li>对所有的参数更新使用同样的learningrate。对于稀疏数据或者特征，有时我们可能想更新快一些对于不经常出现的特征，对于常出现的特征更新慢一些，这时候SGD就不太能满足要求了</li>
+  <li>SGD容易收敛到局部最优，并且容易被困在鞍点</li>
+</ul>
+
+<p>损失平面等高线：</p>
+
+<p><img src="http://img.blog.csdn.net/20160824161755284" alt="损失平面等高线" /></p>
+
+<p>在鞍点处的比较：</p>
+
+<p><img src="http://img.blog.csdn.net/20160824161815758" alt="在鞍点处的比较" /></p>
+
+<p>在Deep Learning中，往往loss function是非凸的，没有解析解，我们需要通过优化方法来求解。solver的主要作用就是交替调用前向（forward)算法和后向（backward)算法来更新参数，从而最小化loss，实际上就是一种迭代的优化算法。</p>
+
+<p>到目前的版本，caffe提供了六种优化算法来求解最优参数，在solver配置文件中，通过设置type类型来选择。
+  在训练多通道图片时，此处最好需要有一个meanfile参数。.binaryproto</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> train_net: "train.prototxt"
+# train_net: "TVG_CRFRNN_new_deploy.prototxt"
+test_net: "val.prototxt"
+test_iter: 16
+test_interval: 500
+base_lr: 5e-4
+lr_policy: "fixed"
+momentum: 0.99
+type: "Adam"
+weight_decay: 0.0005
+display: 100
+max_iter: 1000
+snapshot: 1000
+snapshot_prefix: "snapshot/train"
+solver_mode: GPU
+</code></pre></div></div>
+
+<p>This parameter indicates how the learning rate should change over time. This value is a quoted string.</p>
+
+<ol>
+  <li>Options include:</li>
+</ol>
+
+<ul>
+  <li>“step” - drop the learning rate in step sizes indicated by the gamma parameter.</li>
+  <li>“multistep” - drop the learning rate in step size indicated by the gamma at each specified stepvalue.</li>
+  <li>“fixed” - the learning rate does not change.</li>
+  <li>“exp” - gamma^iteration</li>
+  <li>“poly” -</li>
+  <li>“sigmoid” -</li>
+</ul>
+
+<h3 id="训练caffemodel">训练caffemodel</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>../CRFasRNN-merge/caffe-master/build/tools/caffe train -solver solver.prototxt
+
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>solver = caffe.SGDSolver('models/bvlc_reference_caffenet/solver.prototxt')
+</code></pre></div></div>
+
+<h3 id="整合crfasrnn">整合crfasrnn</h3>
+
+<p><code class="language-plaintext highlighter-rouge">net.params</code> : a vector of blobs for <strong>weight</strong> and <strong>bias</strong> parameters</p>
+
+<p><code class="language-plaintext highlighter-rouge">net.params['conv1_1'][0]</code> contains the weight parameters, an array of shape (32, 1, 5, 5) net.params<a href="http://blog.csdn.net/xuanwu_yan/article/details/7962508">‘conv’</a> contains the bias parameters, an array of shape (3,)</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>solver = caffe.SGDSolver('solver.prototxt')
+solver.net.copy_from('pretrained_param_file')
+[...]
+
+## control layer's initialization
+halt_training = False
+for layer in solver.net.params.keys():
+  for index in range(0, 2):
+    if len(solver.net.params[layer]) &lt; index+1:
+      continue
+
+    if np.sum(solver.net.params[layer][index].data) == 0:
+      print layer + ' is composed of zeros!'
+      halt_training = True
+
+if halt_training:
+  print 'Exiting.'
+  exit()
+</code></pre></div></div>
+
+<p>To launch <strong>one step</strong> of the gradient descent, that is a forward propagation, a backward propagation and the update of the net params given the gradients (update of the net.params[k][j].data) :</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>solver.step(1)
+</code></pre></div></div>
+
+<h3 id="multistagemeanfieldlayer">MultiStageMeanfieldLayer</h3>
+
+<h2 id="4-细节">4. 细节</h2>
+
+<h3 id="loss-function">Loss Function</h3>
+
+<ul>
+  <li>训练时迭代5，测试时迭代10</li>
+  <li>Loss function：
+    <ul>
+      <li>训练时：log likelihood</li>
+      <li>测试时：average IU</li>
+    </ul>
+  </li>
+</ul>
+
+<p>average intersection over union(IU)</p>
+
+<h3 id="normalization-techniques">Normalization techniques</h3>
+
+<p>rectified linear unit (ReLU)</p>
+
+<h2 id="5-环境搭建">5. 环境搭建</h2>
+
+<p>安装python依赖库：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    sudo pip install -r requirements.txt
+</code></pre></div></div>
+
+<h3 id="测试">测试</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    #!/bin/bash
+
+    TOOLS=../../caffe/build/tools
+    WEIGHTS=TVG_CRFRNN_COCO_VOC.caffemodel
+    SOLVER=TVG_CRFRNN_new_solver.prototxt
+
+    $TOOLS/caffe train -solver $SOLVER -weights $WEIGHTS -gpu 0
+</code></pre></div></div>
+
+<h3 id="debug">Debug</h3>
+
+<ol>
+  <li>cuda</li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    libcudart.so.7.0: cannot open shared object file: No such file or directory
+</code></pre></div></div>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    sudo ldconfig /usr/local/cuda-7.5/lib64
+</code></pre></div></div>
+
+<ol>
+  <li>Python</li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    Unknown layer type: Python (known types: AbsVal, Accuracy, ArgMax, BNLL, Concat, ContrastiveLoss, Convolution, Crop, Data, Deconvolution, Dropout, DummyData, Eltwise, Embed, EuclideanLoss, Exp, Filter, Flatten, HDF5Data, HDF5Output, HingeLoss, Im2col, ImageData, InfogainLoss, InnerProduct, LRN, Log, MVN, MemoryData, MultiStageMeanfield, MultinomialLogisticLoss, PReLU, Pooling, Power, ReLU, Reduction, Reshape, SPP, Sigmoid, SigmoidCrossEntropyLoss, Silence, Slice, Softmax, SoftmaxWithLoss, Split, TanH, Threshold, Tile, WindowData)
+</code></pre></div></div>
+
+<p>修改Makefile.config</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>WITH_PYTHON_LAYER := 1
+</code></pre></div></div>
+
+<p>重新make caffe</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rm -rf ./build/*
+make all -j8
+</code></pre></div></div>
+
+<p>8 is the number of parallel threads for compilation (a good choice for the number of threads is the number of cores in your machine).</p>
+
+<p>2.1 build errors:undefined cv::imread() cv::imencode() …</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cmake
+</code></pre></div></div>
+
+<h2 id="6-related-work">6. Related Work</h2>
+
+<ul>
+  <li>
+    <p>《<em>Efficient Inference in Fully Connected CRFs with Gaussian Edge Potentials</em>》</p>
+
+  </li>
+</ul>]]></content><author><name></name></author><category term="2D Vision" /><category term="CNN" /><category term="图像分割" /><summary type="html"><![CDATA[人工识别像划重点一样，真的很枯燥很累啊]]></summary></entry></feed>

@@ -1,0 +1,148 @@
+<!DOCTYPE html> <html lang="en"> <head> <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"> <meta http-equiv="X-UA-Compatible" content="IE=edge"> <title> 肺部结节检测 | Ling Luo </title> <meta name="author" content=" "> <meta name="description" content="experience in the Tianchi Lung Nodule Detection Contest"> <meta name="keywords" content="jekyll, jekyll-theme, academic-website, portfolio-website"> <link rel="stylesheet" href="/assets/css/bootstrap.min.css?a4b3f509e79c54a512b890d73235ef04"> <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mdbootstrap@4.20.0/css/mdb.min.css" integrity="sha256-jpjYvU3G3N6nrrBwXJoVEYI/0zw8htfFnhT9ljN3JJw=" crossorigin="anonymous"> <link defer rel="stylesheet" href="/assets/css/academicons.min.css?f0b7046b84e425c55f3463ac249818f5"> <link defer rel="stylesheet" href="/assets/css/scholar-icons.css?62b2ac103a88034e6882a5be5f3e2772"> <link defer rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Roboto+Slab:100,300,400,500,700|Material+Icons&amp;display=swap"> <link defer rel="stylesheet" href="/assets/css/jekyll-pygments-themes-github.css?591dab5a4e56573bf4ef7fd332894c99" media="" id="highlight_theme_light"> <link rel="shortcut icon" href="/assets/img/favicon.ico?9a0f3f7590583a59d5ba9fe0008b742b"> <link rel="stylesheet" href="/assets/css/main.css?d41d8cd98f00b204e9800998ecf8427e"> <link rel="canonical" href="https://rowl1ng.com/posts/2017/luna/"> <script src="/assets/js/theme.js?a81d82887dd692e91686b43de4542f18"></script> <link defer rel="stylesheet" href="/assets/css/jekyll-pygments-themes-native.css?5847e5ed4a4568527aa6cfab446049ca" media="none" id="highlight_theme_dark"> <script>
+    initTheme();
+  </script> </head> <body class="fixed-top-nav "> <header> <nav id="navbar" class="navbar navbar-light navbar-expand-sm fixed-top" role="navigation"> <div class="container"> <a class="navbar-brand title font-weight-lighter" href="/"> Ling Luo </a> <button class="navbar-toggler collapsed ml-auto" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation"> <span class="sr-only">Toggle navigation</span> <span class="icon-bar top-bar"></span> <span class="icon-bar middle-bar"></span> <span class="icon-bar bottom-bar"></span> </button> <div class="collapse navbar-collapse text-right" id="navbarNav"> <ul class="navbar-nav ml-auto flex-nowrap"> <li class="nav-item "> <a class="nav-link" href="/"><strong>Ling</strong> Luo </a> </li> <li class="nav-item active"> <a class="nav-link" href="/posts/">Posts </a> </li> <li class="nav-item "> <a class="nav-link" href="/publications/">Publications </a> </li> <li class="nav-item "> <a class="nav-link" href="/projects/">Projects </a> </li> <li class="nav-item "> <a class="nav-link" href="/repositories/">Repositories </a> </li> <li class="nav-item "> <a class="nav-link" href="/teaching/">Teaching </a> </li> <li class="nav-item "> <a class="nav-link" href="/cv/">CV </a> </li> <li class="nav-item dropdown "> <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More </a> <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown"> <a class="dropdown-item " href="/blog/">Blog</a> <div class="dropdown-divider"></div> <a class="dropdown-item " href="/MyWiki/">Wiki</a> </div> </li> <li class="nav-item"> <button id="search-toggle" title="Search" onclick="openSearchModal()"> <span class="nav-link">ctrl k <i class="ti ti-search"></i></span> </button> </li> <li class="toggle-container"> <button id="light-toggle" title="Change theme"> <i class="ti ti-sun-moon" id="light-toggle-system"></i> <i class="ti ti-moon-filled" id="light-toggle-dark"></i> <i class="ti ti-sun-filled" id="light-toggle-light"></i> </button> </li> </ul> </div> </div> </nav> <progress id="progress" value="0"> <div class="progress-container"> <span class="progress-bar"></span> </div> </progress> </header> <div class="container mt-5" role="main"> <div class="post"> <header class="post-header"> <h1 class="post-title">肺部结节检测</h1> <p class="post-meta"> Created on April 25, 2017 </p> <p class="post-tags"> <i class="fa-solid fa-calendar fa-sm"></i> 2017   ·   <i class="fa-solid fa-hashtag fa-sm"></i> 医疗图像   ·   <i class="fa-solid fa-tag fa-sm"></i> 2D Vision </p> </header> <article class="post-content"> <div id="markdown-content"> <h1 id="图像处理基础">图像处理基础</h1> <ul> <li> <code class="language-plaintext highlighter-rouge">origin</code>：表示CT图像最边缘的坐标</li> <li> <code class="language-plaintext highlighter-rouge">sapcing</code>：真实世界和像素的比例关系</li> </ul> <p><img src="http://upload-images.jianshu.io/upload_images/1156558-a483ffcb4ca3d4ee.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="此处输入图片的描述"></p> <ul> <li>统一spacing到0.5x0.5x0.5mm，也就是说96x96的patch对应现实中48x48mmm</li> </ul> <p>预处理阶段可能用到的包：</p> <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>from skimage.segmentation import clear_border
+from skimage.measure import label, regionprops
+from skimage.filters import roberts, sobel
+from scipy import ndimage as ndi
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection # 用于可视化3d图像
+from skimage.morphology import ball, disk, dilation, binary_erosion, remove_small_objects, erosion, closing, reconstruction, binary_closing
+</code></pre></div></div> <h2 id="肺部区域分割">肺部区域分割</h2> <p>参考<a href="https://www.kaggle.com/arnavkj95/candidate-generation-and-luna16-preprocessing/code" rel="external nofollow noopener" target="_blank">Candidate Generation and LUNA16 preprocessing </a>可实现肺部区域的分割，从而为下一步提取3d cube做准备。</p> <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def segment_lung_from_ct_scan(ct_scan):
+    return np.asarray([get_segmented_lungs(slice) for slice in ct_scan])
+
+def get_segmented_lungs(im, plot=False):
+
+    '''
+    This funtion segments the lungs from the given 2D slice.
+    '''
+    if plot == True:
+        f, plots = plt.subplots(8, 1, figsize=(5, 40))
+    '''
+    Step 1: Convert into a binary image.
+    '''
+    binary = im &lt; 200
+    if plot == True:
+        plots[0].axis('off')
+        plots[0].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 2: Remove the blobs connected to the border of the image.
+    '''
+    cleared = clear_border(binary)
+    if plot == True:
+        plots[1].axis('off')
+        plots[1].imshow(cleared, cmap=plt.cm.bone)
+    '''
+    Step 3: Label the image.
+    '''
+    label_image = label(cleared)
+    if plot == True:
+        plots[2].axis('off')
+        plots[2].imshow(label_image, cmap=plt.cm.bone)
+    '''
+    Step 4: Keep the labels with 2 largest areas.
+    '''
+    areas = [r.area for r in regionprops(label_image)]
+    areas.sort()
+    if len(areas) &gt; 2:
+        for region in regionprops(label_image):
+            if region.area &lt; areas[-2]:
+                for coordinates in region.coords:
+                       label_image[coordinates[0], coordinates[1]] = 0
+    binary = label_image &gt; 0
+    if plot == True:
+        plots[3].axis('off')
+        plots[3].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 5: Erosion operation with a disk of radius 2. This operation is
+    seperate the lung nodules attached to the blood vessels.
+    '''
+    selem = disk(2)
+    binary = binary_erosion(binary, selem)
+    if plot == True:
+        plots[4].axis('off')
+        plots[4].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 6: Closure operation with a disk of radius 10. This operation is
+    to keep nodules attached to the lung wall.
+    '''
+    selem = disk(10)
+    binary = binary_closing(binary, selem)
+    if plot == True:
+        plots[5].axis('off')
+        plots[5].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 7: Fill in the small holes inside the binary mask of lungs.
+    '''
+    edges = roberts(binary)
+    binary = ndi.binary_fill_holes(edges)
+    if plot == True:
+        plots[6].axis('off')
+        plots[6].imshow(binary, cmap=plt.cm.bone)
+    '''
+    Step 8: Superimpose the binary mask on the input image.
+    '''
+#     get_high_vals = binary == 0
+#     im[get_high_vals] = 0
+#     if plot == True:
+#         plots[7].axis('off')
+#         plots[7].imshow(im, cmap=plt.cm.bone)
+
+    return binary
+</code></pre></div></div> <p><img src="https://s2.loli.net/2025/08/18/BvDAH5Ge8r27fiK.png" alt="image_1cdrhtvlq1v291i8a1ah217faiu89.png-83kB"></p> <p>可视化3d肺部分割</p> <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def plot_3d(image, threshold=-300):
+    from skimage import measure, feature
+
+    # Position the scan upright,
+    # so the head of the patient would be at the top facing the camera
+    p = image.transpose(2,1,0)
+    p = p[:,:,::-1]
+
+#     print measure.marching_cubes(p, threshold)
+    verts, faces, _, _= measure.marching_cubes(p, threshold)
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Fancy indexing: `verts[faces]` to generate a collection of triangles
+    mesh = Poly3DCollection(verts[faces], alpha=0.1)
+    face_color = [0.5, 0.5, 1]
+    mesh.set_facecolor(face_color)
+    ax.add_collection3d(mesh)
+
+    ax.set_xlim(0, p.shape[0])
+    ax.set_ylim(0, p.shape[1])
+    ax.set_zlim(0, p.shape[2])
+
+    plt.show()
+</code></pre></div></div> <p><img src="https://s2.loli.net/2025/08/18/bRExLuFCwvVHdoO.png" alt="image_1cdri1e721nbp1c7k1ve5nu2tpd1m.png-134.4kB"></p> <p>去除假阳性</p> <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>selem = ball(10)
+binary = binary_opening(segmented_ct_scan, selem)
+
+label_scan = label(binary)
+
+areas = [r.area for r in regionprops(label_scan)] # 找连通区域
+areas.sort()
+print areas
+</code></pre></div></div> <p><img src="https://s2.loli.net/2025/08/18/UIWAk6e7nRG5bys.png" alt="image_1cdri1qfm19g6t1e1bbg13441a3e23.png-128kB"></p> <p>提取3d cube作为inference输入，所有cube的可视化：</p> <p><img src="https://s2.loli.net/2025/08/18/1FmKfiua6vNAHX2.png" alt="image_1cdrljm251gjg108t17fj1eit1bb92g.png-149.5kB"></p> <p>差一步normalize到相同pixel spacing的过程：</p> <p><img src="https://s2.loli.net/2025/08/18/ta6EsPZ4nuyXVqK.png" alt="image_1ce5gjlu619aq325k941e6o14p29.png-142.7kB"></p> <p>检查：</p> <p><img src="https://s2.loli.net/2025/08/18/AfhXHeF5ajc7dSm.png" alt="image_1ce6iegtia0mjhs46f1q3n1e1e9.png-16.5kB"></p> <h1 id="模型">模型</h1> <p>考虑到3d场景下做目标检测的计算量，通常分两个阶段，先筛出可疑对象，再筛掉假阳性：</p> <h2 id="stage-1candidates-proposal">Stage 1：Candidates Proposal</h2> <p>这个阶段的任务是尽可能找出所有可能是结节的候选（candidate）</p> <h3 id="思路1segmentation">思路1：Segmentation</h3> <p>例如U-net，</p> <h4 id="merge-candidates">Merge Candidates</h4> <p>先腐蚀，再算连通性，再取label，每个label代表一个candidate，取mass中心，存储为csv 对照annotations.csv得到每个candidate的是TP还是FP的label，得到新的csv（最后一列为true/false的标记） 欧式距离</p> <h3 id="思路2-object-detection">思路2: Object Detection</h3> <p>例如Faster RCNN，使用2D模型处理3D检测问题，例如每个通道代表z轴的一个slice，这样就有3个slice组成的3通道二维图像，即形如\(600\times 600 \times 3\)的image。每个通道可以是相邻的slice。</p> <p>需要注意的是：考虑到肺结节的尺度比常规的自然图像中的物体要小得多，而原始的Faster RCNN使用的是16倍降采样（VGG-16Net的前四个卷积group作为feature extraction），需要通过减小降采样的方式提升ROI检测的效果。有两种思路：</p> <ol> <li>减少feature extractor的maxpooling层：例如删掉某个group中的maxpooling</li> <li>在feature extractor最后增加deconvolutional layer：例如 <code class="language-plaintext highlighter-rouge">nn.ConvTranspose2d(1024, 1024, 4, 4, 4)</code>会上采样4倍，这样最终是降采样4倍</li> </ol> <p>另一个相伴相生的问题：标注的大小。normalize之后的结节标注可能只有1个像素大小（可能是医生标注的问题），这样即使是4倍下采样也达不到检出效果。我的方案是中心不变、扩大到8个像素。</p> <h4 id="rpn">RPN</h4> <ul> <li>input：image;</li> <li>output：一系列矩形框，代表ROI，每个框都有一个objectness score，代表是物体的概率。</li> </ul> <h2 id="stage2false-positive--reduction">Stage2：False Positive Reduction</h2> <h3 id="2d-resnet">2D Resnet</h3> <p>可参考<a href="https://github.com/gzuidhof/luna16" rel="external nofollow noopener" target="_blank">LUNA16 Lung Nodule Analysis</a></p> <p>First we equalize the spacings tp 0.5mm0.5mm0.5mm using src/data_processing/equalize_spacings.py. Then we create the 96x96 patches in all three orientations using src/data_processing/create_xy_xz_yz_CARTESIUS.py. Scripts to perform this using SLURM for job management (will require some editing of paths) can be found in /scripts/create_patches/ and /scripts/rescale</p> <ul> <li>取三个轴向的切面(patch)，根据candidate的label存储在true/false文件夹下</li> </ul> <h3 id="3d-conv">3d conv</h3> <p>由于ct是三维的，考虑使用常见的2d U-net的3d版本。</p> <p>可参考：</p> <ul> <li><a href="https://www.kaggle.com/c/data-science-bowl-2017/details/tutorial" rel="external nofollow noopener" target="_blank">U-Net Segmentation Approach to Cancer Diagnosis</a></li> <li>在luna上的3dconv的unet实现：<a href="https://github.com/Wrosinski/Kaggle-DSB/blob/master/LUNA/models/U-Net%203D/3DUNet_train_generator.py" rel="external nofollow noopener" target="_blank">Kaggle U-net</a> </li> <li>keras 提供的<a href="https://keras-cn.readthedocs.io/en/latest/layers/convolutional_layer/" rel="external nofollow noopener" target="_blank">conv3d</a>：</li> </ul> <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>keras.layers.convolutional.Conv3D(
+    filters, # 卷积核的数目（即输出的维度）
+    kernel_size, # 单个整数或由3个整数构成的list/tuple，卷积核的宽度和长度。如为单个整数，则表示在各个空间维度的相同长度。
+    strides=(1, 1, 1),
+    padding='valid',
+    data_format=None,
+    dilation_rate=(1, 1, 1),
+    activation=None,
+    use_bias=True,
+    kernel_initializer='glorot_uniform',
+    bias_initializer='zeros',
+    kernel_regularizer=None,
+    bias_regularizer=None,
+    activity_regularizer=None,
+    kernel_constraint=None,
+    bias_constraint=None)
+</code></pre></div></div> <p>三维卷积对三维的输入进行滑动窗卷积，当使用该层作为第一层时，应提供input_shape参数。例如input_shape = (3,10,128,128)代表对10帧128*128的彩色RGB图像进行卷积。数据的通道位置仍然有data_format参数指定。</p> <p>输入shape</p> <ul> <li> <p><code class="language-plaintext highlighter-rouge">‘channels_first’</code>模式下，输入应为形如<code class="language-plaintext highlighter-rouge">（samples，channels，input_dim1，input_dim2, input_dim3）</code>的5D张量</p> </li> <li> <p><code class="language-plaintext highlighter-rouge">‘channels_last’</code>模式下，输入应为形如<code class="language-plaintext highlighter-rouge">（samples，input_dim1，input_dim2, input_dim3，channels）</code>的5D张量</p> </li> </ul> <p>这里的输入shape指的是函数内部实现的输入shape，而非函数接口应指定的input_shape。</p> <h1 id="评价指标">评价指标</h1> <p><a href="https://luna16.grand-challenge.org/evaluation/" rel="external nofollow noopener" target="_blank">Luna官方说明</a>：The evaluation is performed by measuring the detection sensitivity of the algorithm and the corresponding false positive rate per scan.</p> <ul> <li>TP判定（hit criterion）：candidate必须是在standard reference 中以nodule center为中心的半径R（结节直径除2）之内。hit到一个正例之后就将这个例子从表中除去，保证不重复计数。也就是说，又有第二个预测点hit到这个结节时就被忽略，不算TP。</li> <li>FP判定：在设定的半径距离内没有hit到任何reference结节.</li> <li>忽略的情况：Candidates that are detecting irrelevant findings (see Data section in this page for definition) are ignored during the evaluation and are not considered either false positives or true positives.</li> </ul> <p>最终的分数是取7个横座标点对应的纵座标（TPR）均值：</p> <ul> <li>横座标（FPR）： 1/8, 1/4, 1/2, 1, 2, 4, and 8 FPs per scan</li> <li>完美是1，最低是0. Most CAD systems in clinical use today have their internal threshold set to operate somewhere between 1 to 4 false positives per scan on average. Some systems allow the user to vary the threshold. To make the task more challenging, we included low false positive rates in our evaluation. This determines if a system can also identify a significant percentage of nodules with very few false alarms, as might be needed for CAD algorithms that operate more or less autonomously.</li> </ul> <p>论文里关于FROC的说明：</p> <p>sensitivity是关于FPR平均值的函数：</p> <p>This means that the sensitivity (y) is plotted as a function of the average number of false positive markers per scan ().</p> <ul> <li>计算FROC曲线：阈值为t，概率p≥ t则判定为结节，由此计算TPR、FPR，得到曲线上的一个点。</li> <li>图像ID号（seriesuid）：发现结果所在的scan的名字。</li> <li>三维坐标：浮点数（用小数点，不要用逗号）。注意：我们提供的数据的第一个体素（voxel） 的坐标是 (-128.6,-175.3,-298.3). Coordinates are given in world coordinates or millimeters. You can verify if you use the correct way of addressing voxels by checking the supplied coordinates for the example data, the locations should refer to locations that hold a nodule.</li> <li>probability : 描述为真结节的可疑程度，浮点数。通过调节对它设定的<strong>阈值</strong>来计算 <strong>FROC曲线</strong>。</li> </ul> <p>Between the strings and the numbers should be a comma character. The order of the lines is irrelevant.</p> <p>The following is an example result file:</p> <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>seriesuid,coordX,coordY,coordZ,probability
+LKDS_00001,75.5,56.0,-194.254518072,6.5243e-05
+LKDS_00002,-35.5999634723,78.000078755,-13.3814265714,0.00269234
+LKDS_00003,80.2837837838,198.881575673,-572.700012,0.00186072
+LKDS_00004,-98.8499883785,33.6429184312,-99.7736607907,0.00035473
+LKDS_00005,98.0667072477,-46.4666486536,-141.421980179,0.000256219
+
+</code></pre></div></div> <p>This file contains 8 findings (obviously way too few). There are 5 unique likelihood values. This means that there will be 5 unique thresholds that produce a distinct set of findings (each threshold discards finding below the threshold. That means there will be 5 points on the FROC curve.</p> <p>It has to be noted that for the ‘false positive reduction’ challenge track, 551,065 findings (the amount of given candidates) are expected. The order of the lines is irrelevant.</p> </div> </article> <br> <hr> <br> <ul class="list-disc pl-8"></ul> <h2 class="text-3xl font-semibold mb-4 mt-12">Enjoy Reading This Article?</h2> <p class="mb-2">Here are some more articles you might like to read next:</p> <li class="my-2"> <a class="text-pink-700 underline font-semibold hover:text-pink-800" href="/posts/2020/SketchVR/">VR Sketch Development Log</a> </li> <li class="my-2"> <a class="text-pink-700 underline font-semibold hover:text-pink-800" href="/posts/2018/faster-rcnn/">Detectron代码分析：从Faster R-CNN 到 Mask R-CNN</a> </li> <li class="my-2"> <a class="text-pink-700 underline font-semibold hover:text-pink-800" href="/posts/2017/chatbot/">基于Rasa_NLU的微信chatbot</a> </li> <li class="my-2"> <a class="text-pink-700 underline font-semibold hover:text-pink-800" href="/posts/2017/phoneme/">基于音素识别的语音相似度研究</a> </li> <li class="my-2"> <a class="text-pink-700 underline font-semibold hover:text-pink-800" href="/posts/2015/RoadNN/">裂缝识别</a> </li> </div> </div> <footer class="fixed-bottom" role="contentinfo"> <div class="container mt-0"> © Copyright 2025 . Powered by <a href="https://jekyllrb.com/" target="_blank" rel="external nofollow noopener">Jekyll</a> with <a href="https://github.com/alshedivat/al-folio" rel="external nofollow noopener" target="_blank">al-folio</a> theme. Hosted by <a href="https://pages.github.com/" target="_blank" rel="external nofollow noopener">GitHub Pages</a>. </div> </footer> <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script> <script src="/assets/js/bootstrap.bundle.min.js"></script> <script src="https://cdn.jsdelivr.net/npm/mdbootstrap@4.20.0/js/mdb.min.js" integrity="sha256-NdbiivsvWt7VYCt6hYNT3h/th9vSTL4EDWeGs5SN3DA=" crossorigin="anonymous"></script> <script defer src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js" integrity="sha256-Nn1q/fx0H7SNLZMQ5Hw5JLaTRZp0yILA/FRexe19VdI=" crossorigin="anonymous"></script> <script defer src="https://cdn.jsdelivr.net/npm/imagesloaded@5.0.0/imagesloaded.pkgd.min.js" integrity="sha256-htrLFfZJ6v5udOG+3kNLINIKh2gvoKqwEhHYfTTMICc=" crossorigin="anonymous"></script> <script defer src="/assets/js/masonry.js?a0db7e5d5c70cc3252b3138b0c91dcaf" type="text/javascript"></script> <script defer src="https://cdn.jsdelivr.net/npm/medium-zoom@1.1.0/dist/medium-zoom.min.js" integrity="sha256-ZgMyDAIYDYGxbcpJcfUnYwNevG/xi9OHKaR/8GK+jWc=" crossorigin="anonymous"></script> <script defer src="/assets/js/zoom.js?85ddb88934d28b74e78031fd54cf8308"></script> <script src="/assets/js/no_defer.js?2781658a0a2b13ed609542042a859126"></script> <script defer src="/assets/js/common.js?e0514a05c5c95ac1a93a8dfd5249b92e"></script> <script defer src="/assets/js/copy_code.js?c8a01c11a92744d44b093fc3bda915df" type="text/javascript"></script> <script defer src="/assets/js/jupyter_new_tab.js?d9f17b6adc2311cbabd747f4538bb15f"></script> <script async src="https://d1bxh8uas1mnw7.cloudfront.net/assets/embed.js"></script> <script async src="https://badge.dimensions.ai/badge.js"></script> <script defer type="text/javascript" id="MathJax-script" src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI=" crossorigin="anonymous"></script> <script src="/assets/js/mathjax-setup.js?a5bb4e6a542c546dd929b24b8b236dfd"></script> <script defer src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6" crossorigin="anonymous"></script> <script defer src="/assets/js/progress-bar.js?2f30e0e6801ea8f5036fa66e1ab0a71a" type="text/javascript"></script> <script src="/assets/js/vanilla-back-to-top.min.js?f40d453793ff4f64e238e420181a1d17"></script> <script>
+    addBackToTop();
+  </script> <script type="module" src="/assets/js/search/ninja-keys.min.js?a3446f084dcaecc5f75aa1757d087dcf"></script> <ninja-keys hidebreadcrumbs noautoloadmdicons placeholder="Type to start searching"></ninja-keys> <script src="/assets/js/search-setup.js?6c304f7b1992d4b60f7a07956e52f04a"></script> <script src="/assets/js/search-data.js"></script> <script src="/assets/js/shortcut-key.js?6f508d74becd347268a7f822bca7309d"></script> </body> </html>
